@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Розрахунок потреби реагентів та їх вартості</title>
+  link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@700&family=Roboto:wght@400;500;700;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/modern-normalize/1.1.0/modern-normalize.css"
+    integrity="sha512-Y0MM+V6ymRKN2zStTqzQ227DWhhp4Mzdo6gnlRnuaNCbc+YN/ZH0sBCLTM4M0oSy9c9VKiCvd4Jk44aCLrNS5Q=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./css/styles.css">
+
+<<!-- Google tag (gtag.js) -->
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5BZZCV5DRK"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+  gtag("config", "G-5BZZCV5DRK");
+</script>
+<script>
+  const email = localStorage.getItem("allowedEmail");
+  if (email) {
+    gtag("set", "user_properties", {
+      user_id: email
+    });
+  }
+</script>
+<script>
+  function sha256(input) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
+    return crypto.subtle.digest("SHA-256", data).then(hash => {
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    });
+  }
+</script>
+  <style>
+  input, button {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 1rem;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    padding: 5px;
+  }
+
+  label {
+    margin-top: 10px;
+    font-size: 1rem;
+  }
+
+  .container {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  main {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 1rem;
+  }
+
+  @media screen and (min-width: 600px) {
+    input {
+      width: 60%;
+    }
+
+    .btn {
+      width: auto;
+      display: inline-block;
+    }
+  }
+
+  @media screen and (min-width: 900px) {
+    input {
+      width: 30%;
+    }
+  }
+</style>
+</head>
+<body>
+<header class="header">
+    <div class="header__container">
+      <a class="logo" href="./index.html"><img src="./images/logo.svg" alt="logo" width="160"></a>
+      <!--<ul class="nav">
+        <li class="nav__referent"><a class="nav__link" href="./index.html">Головна</a></li>
+        <li class="nav__referent"><a class="nav__link nav__link--active" href="./portfolio.html">Курси</a></li>
+        <li class="nav__referent"><a class="nav__link" href="https://pharmasco.com/contacts" target="_blank" rel="noopener noreferrer">Контакти</a></li>
+      </ul>-->
+      <ul class="contacts">
+        <li class="contacts__contact">
+          <a class="contacts__contact-mail " href="mailto:contact@pharmasco.com">
+            <svg class="contacts__contact-icon" width="20px" height="20px">
+              <use href="./images/sprite.svg#icon-envelope"></use>
+            </svg>contact@pharmasco.com</a>
+          </a>
+        </li>
+       <li class="contacts__contact">
+          <a class="contacts__contact-phone " href="tel:+38 (044) 537-08-04">
+            <svg class="contacts__contact-icon" width="20px" height="20px">
+              <use href="./images/sprite.svg#icon-phone"></use>
+            </svg>+38 (044) 537-08-04</a>
+            <a class="contacts__contact-phone" style="margin-top: 8px;" href="tel:+38 (067) 500-82-74">
+            <svg class="contacts__contact-icon" width="20px" height="20px">
+              <use href="./images/sprite.svg#icon-phone"></use>
+            </svg>+38 (067) 500-82-74</a>
+        </li>
+      </ul>
+    </div>
+    <button class="mobile-menu-btn" type="button" data-menu-button>
+      <svg class="mobile-menu-icon" width="24" height="16">
+        <use class="mobile-menu-burger" href="./images/sprite.svg#24-menu"></use>
+        <use class="mobile-menu-close" href="./images/sprite.svg#icon-X"></use>
+      </svg>
+    </button>
+    <div class="mobile-menu" data-menu>
+      <!--<ul class="mobile-menu-nav">
+        <li class="mobile-menu-nav-item">
+          <a class="link " href="./index.html">Головна</a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a class="link current" href="./portfolio.html">Курси</a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a class="link" href="/contact">Контакти</a>
+        </li>
+      </ul>-->
+      <ul class="mobile-menu-contacts">
+        <li class="contacts__contact">
+          <a class="contacts__contact-phone " href="tel:+38 (044) 537-08-04">
+            <svg class="contacts__contact-icon" width="20px" height="20px">
+              <use href="./images/sprite.svg#icon-phone"></use>
+            </svg>+38 (044) 537-08-04</a>
+            <a class="contacts__contact-phone" style="margin-top: 8px;" href="tel:+38 (067) 500-82-74">
+            <svg class="contacts__contact-icon" width="20px" height="20px">
+              <use href="./images/sprite.svg#icon-phone"></use>
+            </svg>+38 (067) 500-82-74</a>
+        </li>
+        <li class="mobile-menu-contacts-item">
+          <a class="link" href="mailto:contact@pharmasco.com">contact@pharmasco.com</a>
+        </li>
+      </ul>
+      <ul class="mobile-menu-socials">
+        <li class="mobile-menu-socials-item">
+          <a class="mobile-menu-socials-link link" href="https://www.instagram.com/pharmascocom/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        </li>
+        <li class="mobile-menu-socials-item">
+          <a class="mobile-menu-socials-link link" href="https://www.youtube.com/@Pharmasco" target="_blank" rel="noopener noreferrer">Youtube</a>
+        </li>
+        <li class="mobile-menu-socials-item">
+          <a class="mobile-menu-socials-link link" href="https://www.facebook.com/Pharmasco/" target="_blank" rel="noopener noreferrer">Facebook</a>
+        </li>
+      </ul>
+    </div>
+  </header>
+  
+  <main>
+<section class="works">
+  <div class="container">
+  <h2>🔬 Розрахунок потреби реагентів та їх вартості DF 50</h2>
+
+  <label>📦 Вартість приладу (грн): <input type="number" id="devicePrice" value=""></label>
+  <label>🔢 Кількість тестів на день: <input type="number" id="testsPerDay" value=""></label>
+  <label>💸 Ціна тесту для пацієнта (грн): <input type="number" id="testPrice" value=""></label>
+
+  <ul>
+  <li class="button"><button class="btn" onclick="calculate()">🔍 Розрахувати</button>
+  <button class="btn" onclick="copyResult()">📋 Скопіювати результат</button>
+<button class="btn" type="button"><a style="text-decoration: none;" class="text__work" href="./obj3.html">Назад</a></button></li>
+</ul>
+<p style="color: #666; font-style: italic; text-align: center;" >Усі розрахунки є орієнтовними і зроблені на підставі технічних характеристик приладу при ідеальних умовах роботи. Тому вартість може змінюватись від дії різних факторів, таких як: кількість проб в день, вибраної програми внутрішнього контролю якості лабораторією, та інш.</p>   
+
+  <div id="output" class="result"></div>
+  </div>
+</section>
+</main>
+ 
+<footer class="footer">
+    <div class="container">
+      <div class="find-us">
+        <div class="find">
+          <a class="logo footer__logo" href="/"><img src="./images/logo.svg" alt="logo" width="160"></a>
+          <ul class="contacts contacts--footer">
+            <li class="contacts__contact contacts__contact--footer">
+              <address class="contacts__post"><p>Україна, Київська обл.,</p> <p>м. Вишгород,</p> <p>вул. Шолуденка, 15г</p></address>
+            </li>
+            <li class="contacts__contact contacts__contact--footer">
+              <a class="contacts__contact-mail contacts__contact-mail--footer"
+                href="mailto:contact@pharmasco.com">contact@pharmasco.com</a>
+            </li>
+            <li class="contacts__contact contacts__contact--footer">
+              <a class="contacts__contact-phone contacts__contact-phone--footer" href="tel:+38 (044) 537-08-04">+38 (044) 537-08-04</a>
+              <a class="contacts__contact-phone contacts__contact-phone--footer" href="tel:+38 (067) 500-82-74">+38 (067) 500-82-74</a>
+            </li>
+          </ul>
+        </div>
+        <div class="social social--footer">
+          <h2 class="social__title">приєднуйтесь</h2>
+          <ul class="social__list social__list--footer">
+            <li class="social__item social__item--footer">
+              <a class="social__link social__link--footer link" href="https://www.instagram.com/pharmascocom/" target="_blank" rel="noopener noreferrer"
+                aria-label="инстаграм иконка">
+                <svg class="social__icon social__icon--footer" width="20px" height="20px">
+                  <use href="./images/sprite.svg#icon-instagram"></use>
+                </svg></a>
+            </li>
+            <li class="social__item social__item--footer">
+              <a class="social__link social__link--footer link" href="https://www.youtube.com/@Pharmasco" target="_blank" rel="noopener noreferrer"
+                aria-label="твиттер иконка">
+                <svg class="social__icon social__icon--footer" width="20px" height="20px">
+                  <use href="./images/uoytube.svg"></use>
+                </svg></a>
+            </li>
+            <li class="social__item social__item--footer">
+              <a class="social__link social__link--footer link" href="https://www.facebook.com/Pharmasco/" target="_blank" rel="noopener noreferrer"
+                aria-label="фейсбук иконка">
+                <svg class="social__icon social__icon--footer" width="20px" height="20px">
+                  <use href="./images/sprite.svg#icon-facebook"></use>
+                </svg></a> 
+            </li>       
+          </ul>
+        </div>
+        <div class="spam">
+          <h2 class="spam__title" style="line-height: 2;">ТОВ «НВК «Фармаско» – провідний постачальник засобів діагностики для українських закладів охорони здоров’я, лікарів та пацієнтів.</h2>
+          <!--<form class="spam__form">
+            <label class="spam__label">
+              <input class="spam__input" type="email" name="email" placeholder="E-mail" />
+            </label>
+            <button class="btn btn--spam" type="submit">Підписатися<a class="spam-link link" href="" target="_blank"
+                rel="noopener noreferrer" aria-label="инстаграм иконка">
+                <svg class="spam__icon" width="24px" height="24px">
+                  <use href="./images/sprite.svg#icon-send"></use>
+                </svg></a></button>
+          </form>-->
+        </div>
+      </div>
+    </div>
+        <p id="currentUser" style="font-size: smaller; color: #666; text-align: center;"></p>
+        <button id="scrollTopBtn" title="До гори">⬆</button>
+  </footer>
+  <script>
+  const reagents = [
+  { name: "DIL-C", startup: 104.00, shutdown: 500.64, perTest: 32.80, packageSize: 20000, price: 2607 },
+  { name: "LYC-1", startup: 0.16, shutdown: 0, perTest: 0.19, packageSize: 200, price: 1605 },
+  { name: "LYC-2", startup: 13, shutdown: 1.183, perTest: 0.66, packageSize: 500, price: 3852 },
+  { name: "CLE-P", startup: 0, shutdown: 3.6, perTest: 0, packageSize: 50, price: 395 },
+  { name: "CBC-DH", startup: 0.1, shutdown: 0, perTest: 0, packageSize: 1, price: 3520 }
+];
+
+function getWorkingDays(period) {
+  const perMonth = 21;
+  switch (period) {
+    case 'month': return perMonth;
+    case 'quarter': return perMonth * 3;
+    case 'year': return perMonth * 12;
+    default: return 1;
+  }
+}
+
+function calculate() {
+  const devicePrice = +document.getElementById("devicePrice").value || 0;
+  const testsPerDay = +document.getElementById("testsPerDay").value || 0;
+  const testPrice = +document.getElementById("testPrice").value || 0;
+
+  const workDays = getWorkingDays('year');
+  const totalTests = testsPerDay * workDays;
+  const annualRevenue = totalTests * testPrice;
+
+  // 🔄 Реальне використання і закупівля флаконів
+  let totalReagentCost = 0;
+  let reagentState = reagents.map(r => ({
+    remainingVolume: r.packageSize,
+    bottlesUsed: 0,
+    totalVolumeUsed: 0,
+    price: r.price,
+    packageSize: r.packageSize
+  }));
+
+  let accumulatedProfit = 0;
+  let paybackDay = 'не досягається';
+
+  for (let day = 1; day <= workDays; day++) {
+    let dailyCost = 0;
+    const revenue = testsPerDay * testPrice;
+
+    reagentState.forEach((state, i) => {
+      const r = reagents[i];
+      const dailyVolume = r.startup + r.shutdown + r.perTest * testsPerDay;
+      state.totalVolumeUsed += dailyVolume;
+
+      if (state.remainingVolume < dailyVolume) {
+        state.bottlesUsed += 1;
+        totalReagentCost += r.price;
+        dailyCost += r.price;
+        state.remainingVolume = r.packageSize - dailyVolume;
+      } else {
+        state.remainingVolume -= dailyVolume;
+      }
+    });
+
+    const dailyProfit = revenue - dailyCost;
+    accumulatedProfit += dailyProfit;
+
+    if (accumulatedProfit >= devicePrice && paybackDay === 'не досягається') {
+      paybackDay = day;
+    }
+  }
+
+  const annualProfit = annualRevenue - totalReagentCost;
+  const costPerTest = totalTests > 0 ? totalReagentCost / totalTests : 0;
+  const finalNetProfit = annualProfit - devicePrice;
+
+  // 📦 Планування закупівель реагентів
+  let reagentPlanning = "";
+  ["month", "quarter", "year"].forEach(period => {
+    const days = getWorkingDays(period);
+    const tests = testsPerDay * days;
+
+    reagentPlanning += `<li><strong>${period}</strong><ul>`;
+    reagents.forEach(r => {
+      const volume = days * (r.startup + r.shutdown) + tests * r.perTest;
+      const bottles = Math.ceil(volume / r.packageSize);
+      const cost = bottles * r.price;
+      reagentPlanning += `<li>${r.name}: ${bottles} упак. — ${cost.toFixed(2)} грн</li>`;
+    });
+    reagentPlanning += `</ul></li>`;
+  });
+
+  
+const outputText = `
+`;
+
+const outputDiv = document.getElementById("output");
+outputDiv.innerHTML = ""; // очищає попередній вміст
+
+outputText.trim().split('\n').forEach(line => {
+  const span = document.createElement("span");
+  span.textContent = line;
+  span.classList.add("output-line");
+  outputDiv.appendChild(span);
+});
+  outputDiv.innerHTML += `
+  <h3>Результати розрахунку:</h3>
+  <p>📊 Розрахунок на основі реального використання</p>
+  <ul>
+    <li>Робочих днів: ${workDays}</li>
+    <li>Загальна кількість тестів: ${totalTests}</li>
+    <li>Фактичні витрати на реагенти: ${totalReagentCost.toFixed(2)} грн</li>
+    <li>Загальний дохід: ${annualRevenue.toFixed(2)} грн</li>
+    <li>Загальний прибуток: ${annualProfit.toFixed(2)} грн</li>
+    <li>Собівартість одного тесту: ${costPerTest.toFixed(2)} грн</li>
+    <li>Термін окупності приладу: ${paybackDay} робочих днів</li>
+    <li>Чистий фінансовий результат (з урахуванням вартості приладу): ${finalNetProfit.toFixed(2)} грн через рік після початку використання приладу.</li><br>
+    <li>Усі розрахунки є орієнтовними і зроблені на підставі технічних характеристик приладу при ідеальних умовах роботи. Тому вартість може змінюватись від дії різних факторів, таких як: кількість проб в день, вибраної програми внутрішнього контролю якості лабораторією, та інш.</li><br>
+  </ul>
+
+📦 Планування закупівель реагентів
+${reagentPlanning}
+  `;
+}
+
+function copyResult() { const result = document.getElementById("output").innerText; navigator.clipboard.writeText(result).then(() => alert("✅ Результат скопійовано в буфер обміну!") ); }
+
+</script>
+</body>
+</html>

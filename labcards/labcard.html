@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>🧪 Лабораторна картка</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select { width: 100%; padding: 8px; margin-top: 5px; }
+    .device-block { background: #fff; padding: 10px; margin: 10px 0; border-left: 4px solid #0077cc; border-radius: 5px; }
+    button { margin-top: 15px; padding: 10px 15px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #005fa3; }
+  </style>
+</head>
+<body>
+  <h2>🧪 Додати / Редагувати лабораторію</h2>
+
+  <label for="partnerName">Назва лабораторії:</label>
+  <input type="text" id="partnerName">
+
+  <label for="region">📍 Область:</label>
+  <input type="text" id="region" list="region-list">
+  <datalist id="region-list"></datalist>
+
+  <label for="city">🏙️ Місто:</label>
+  <input type="text" id="city" list="city-list">
+  <datalist id="city-list"></datalist>
+
+  <label for="lpz">🏥 ЛПЗ:</label>
+  <input type="text" id="lpz" list="lpz-list">
+  <datalist id="lpz-list"></datalist>
+
+  <label for="labAddress">📫 Адреса:</label>
+  <input type="text" id="labAddress">
+
+  <label for="contractor">🤝 Контрагент:</label>
+  <input type="text" id="contractor">
+
+  <label for="phone">📞 Телефон:</label>
+  <input type="text" id="phone">
+
+  <h3>🔧 Прилади</h3>
+  <div id="devicesContainer"></div>
+  <button id="addDeviceBtn">➕ Додати прилад</button>
+  <button id="saveLabBtn">💾 Зберегти</button>
+
+  <script src="./labcards.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      loadLPZList();
+
+      document.getElementById("addDeviceBtn").addEventListener("click", () => {
+        if (typeof addDevice === "function") addDevice();
+      });
+
+      document.getElementById("saveLabBtn").addEventListener("click", () => {
+        if (typeof saveLabCard === "function") saveLabCard();
+      });
+
+      document.getElementById("region").addEventListener("input", onRegionInput);
+      document.getElementById("city").addEventListener("input", onCityInput);
+      document.getElementById("lpz").addEventListener("input", onLPZInput);
+    });
+  </script>
+</body>
+</html>
