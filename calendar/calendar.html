@@ -30,16 +30,10 @@
       max-width: 400px;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-    .task-modal-content h3 {
-      margin-top: 0;
-    }
     .task-editor {
       display: flex;
       flex-direction: column;
       gap: 10px;
-    }
-    .task-editor label {
-      font-weight: bold;
     }
     .task-editor input,
     .task-editor select {
@@ -51,12 +45,18 @@
       font-size: 1rem;
       cursor: pointer;
     }
+    .filters {
+      margin-bottom: 20px;
+    }
+    .filters label {
+      margin-right: 20px;
+    }
   </style>
 </head>
 <body>
   <h2>📅 Календар задач (FullCalendar)</h2>
 
-  <div style="margin-bottom: 20px;">
+  <div class="filters">
     <label>🏢 Лабораторія:
       <select id="filterLab" onchange="renderFullCalendar()">
         <option value="">Усі</option>
@@ -83,36 +83,6 @@
   <div id="fullCalendar"></div>
 
   <script>
-    function fillFilterOptions(tasks) {
-  const labSet = new Set();
-  const deviceSet = new Set();
-
-  tasks.forEach(t => {
-    labSet.add(t.lab);
-    deviceSet.add(t.device);
-  });
-
-  const labSelect = document.getElementById("filterLab");
-  const deviceSelect = document.getElementById("filterDevice");
-
-  labSelect.innerHTML = '<option value="">Усі</option>';
-  deviceSelect.innerHTML = '<option value="">Усі</option>';
-
-  Array.from(labSet).sort().forEach(lab => {
-    const opt = document.createElement("option");
-    opt.value = lab;
-    opt.textContent = lab;
-    labSelect.appendChild(opt);
-  });
-
-  Array.from(deviceSet).sort().forEach(dev => {
-    const opt = document.createElement("option");
-    opt.value = dev;
-    opt.textContent = dev;
-    deviceSelect.appendChild(opt);
-  });
-}
-
     function loadCalendarTasks() {
       return JSON.parse(localStorage.getItem("calendarTasks") || "[]");
     }
@@ -140,95 +110,125 @@
       }
     }
 
-    function renderFullCalendar() {
-  const calendarEl = document.getElementById("fullCalendar");
-  calendarEl.innerHTML = "";
+    function fillFilterOptions(tasks) {
+      const labSet = new Set();
+      const deviceSet = new Set();
 
-  const allTasks = loadCalendarTasks();
-  fillFilterOptions(allTasks);
+      tasks.forEach(t => {
+        labSet.add(t.lab);
+        deviceSet.add(t.device);
+      });
 
-  const selectedLab = document.getElementById("filterLab").value;
-  const selectedDevice = document.getElementById("filterDevice").value;
-  const selectedStatus = document.getElementById("filterStatus").value;
+      const labSelect = document.getElementById("filterLab");
+      const deviceSelect = document.getElementById("filterDevice");
 
-  const filteredTasks = allTasks.filter(task => {
-    return (
-      (!selectedLab || task.lab === selectedLab) &&
-      (!selectedDevice || task.device === selectedDevice) &&
-      (!selectedStatus || task.status === selectedStatus)
-    );
-  });
+      labSelect.innerHTML = '<option value="">Усі</option>';
+      deviceSelect.innerHTML = '<option value="">Усі</option>';
 
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    locale: "uk",
-    headerToolbar: {
-      left: "prev,next today",
-      center: "title",
-      right: "dayGridMonth,timeGridWeek,listWeek"
-    },
-    events: filteredTasks.map(task => ({
-      id: task.id,
-      title: task.title,
-      start: task.date,
-      backgroundColor: getStatusColor(task.status),
-      borderColor: getStatusColor(task.status),
-      extendedProps: {
-        description: task.description,
-        lab: task.lab,
-        device: task.device,
-        status: task.status
-      }
-    })),
-    eventClick: function(info) {
-      const task = info.event.extendedProps;
-      const modal = document.createElement("div");
-      modal.className = "task-modal";
-      modal.innerHTML = `
-        <div class="task-modal-content">
-          <h3>✏️ Редагування задачі</h3>
-          <form class="task-editor">
-            <label>📅 Дата:
-              <input type="date" name="date" value="${info.event.startStr}">
-            </label>
-            <label>🔢 Кількість тестів:
-              <input type="number" name="count" value="${extractTestCount(info.event.title)}">
-            </label>
-            <label>📌 Статус:
-              <select name="status">
-                <option value="заплановано" ${task.status === "заплановано" ? "selected" : ""}>Заплановано</option>
-                <option value="виконано" ${task.status === "виконано" ? "selected" : ""}>Виконано</option>
-                <option value="перенесено" ${task.status === "перенесено" ? "selected" : ""}>Перенесено</option>
-              </select>
-            </label>
-            <button type="submit">💾 Зберегти</button>
-            <button type="button" onclick="this.closest('.task-modal').remove()">❌ Закрити</button>
-          </form>
-        </div>
-      `;
-      document.body.appendChild(modal);
+      Array.from(labSet).sort().forEach(lab => {
+        const opt = document.createElement("option");
+        opt.value = lab;
+        opt.textContent = lab;
+        labSelect.appendChild(opt);
+      });
 
-      modal.querySelector("form").onsubmit = (e) => {
-        e.preventDefault();
-        const f = e.target;
-        const updatedTask = {
-          id: info.event.id,
-          date: f.date.value,
-          title: `🔬 ${info.event.title.split("—")[0].trim()} — ${+f.count.value} тестів`,
-          description: task.description,
-          lab: task.lab,
-          device: task.device,
-          status: f.status.value
-        };
-        updateTask(updatedTask);
-        modal.remove();
-        renderFullCalendar();
-      };
+      Array.from(deviceSet).sort().forEach(dev => {
+        const opt = document.createElement("option");
+        opt.value = dev;
+        opt.textContent = dev;
+        deviceSelect.appendChild(opt);
+      });
     }
-  });
 
-  calendar.render();
-}
+    function renderFullCalendar() {
+      const calendarEl = document.getElementById("fullCalendar");
+      calendarEl.innerHTML = "";
+
+      const allTasks = loadCalendarTasks();
+      fillFilterOptions(allTasks);
+
+      const selectedLab = document.getElementById("filterLab").value;
+      const selectedDevice = document.getElementById("filterDevice").value;
+      const selectedStatus = document.getElementById("filterStatus").value;
+
+      const filteredTasks = allTasks.filter(task => {
+        return (
+          (!selectedLab || task.lab === selectedLab) &&
+          (!selectedDevice || task.device === selectedDevice) &&
+          (!selectedStatus || task.status === selectedStatus)
+        );
+      });
+
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: "dayGridMonth",
+        locale: "uk",
+        headerToolbar: {
+          left: "prev,next today",
+          center: "title",
+          right: "dayGridMonth,timeGridWeek,listWeek"
+        },
+        events: filteredTasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          start: task.date,
+          backgroundColor: getStatusColor(task.status),
+          borderColor: getStatusColor(task.status),
+          extendedProps: {
+            description: task.description,
+            lab: task.lab,
+            device: task.device,
+            status: task.status
+          }
+        })),
+        eventClick: function(info) {
+          const task = info.event.extendedProps;
+          const modal = document.createElement("div");
+          modal.className = "task-modal";
+          modal.innerHTML = `
+            <div class="task-modal-content">
+              <h3>✏️ Редагування задачі</h3>
+              <form class="task-editor">
+                <label>📅 Дата:
+                  <input type="date" name="date" value="${info.event.startStr}">
+                </label>
+                <label>🔢 Кількість тестів:
+                  <input type="number" name="count" value="${extractTestCount(info.event.title)}">
+                </label>
+                <label>📌 Статус:
+                  <select name="status">
+                    <option value="заплановано" ${task.status === "заплановано" ? "selected" : ""}>Заплановано</option>
+                    <option value="виконано" ${task.status === "виконано" ? "selected" : ""}>Виконано</option>
+                    <option value="перенесено" ${task.status === "перенесено" ? "selected" : ""}>Перенесено</option>
+                  </select>
+                </label>
+                <button type="submit">💾 Зберегти</button>
+                <button type="button" onclick="this.closest('.task-modal').remove()">❌ Закрити</button>
+              </form>
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          modal.querySelector("form").onsubmit = (e) => {
+            e.preventDefault();
+            const f = e.target;
+            const updatedTask = {
+              id: info.event.id,
+              date: f.date.value,
+              title: `🔬 ${info.event.title.split("—")[0].trim()} — ${+f.count.value} тестів`,
+              description: task.description,
+              lab: task.lab,
+              device: task.device,
+              status: f.status.value
+            };
+            updateTask(updatedTask);
+            modal.remove();
+            renderFullCalendar();
+          };
+        }
+      });
+
+      calendar.render();
+    }
 
     window.addEventListener("DOMContentLoaded", renderFullCalendar);
   </script>

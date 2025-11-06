@@ -1,285 +1,64 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <title>🧪 Мої лабораторії</title>
+  <meta charset="UTF-8">
+  <title>🧪 Лабораторії</title>
   <style>
     body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
-    h2 { text-align: center; }
-    .lab-card {
-      background: #fff; padding: 15px; margin: 10px 0;
-      border-left: 4px solid #0077cc; border-radius: 5px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .lab-card h3 { margin: 0 0 5px; }
-    .lab-card ul { margin: 5px 0 0 15px; padding: 0; }
-    .lab-card li { font-size: 14px; margin-bottom: 10px; }
-    .actions { margin-top: 10px; }
-    button {
-      background: #0077cc; color: white; border: none;
-      padding: 5px 10px; border-radius: 4px; cursor: pointer;
-      margin-right: 5px;
-    }
+    label { display: inline-block; margin: 10px 10px 0 0; font-weight: bold; }
+    input { padding: 6px; margin-top: 5px; }
+    .lab-card { background: #fff; padding: 10px; margin: 10px 0; border-left: 4px solid #0077cc; border-radius: 5px; }
+    button { margin-top: 10px; padding: 8px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
     button:hover { background: #005fa3; }
-    .add-btn {
-      display: inline-block; margin: 20px 0;
-      background: #25a72b; color: white; padding: 10px 15px;
-      text-decoration: none; border-radius: 5px;
-    }
-    .modal {
-      position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-      background: #fff; padding: 20px; border: 2px solid #333;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3); z-index: 9999;
-      max-width: 500px;
-    }
-    .modal textarea { width: 100%; height: 200px; }
   </style>
 </head>
 <body>
-  <h2>🧪 Мої лабораторії</h2>
+  <h2>🧪 Список лабораторій</h2>
 
-  <div id="filters">
-    <input list="partnerList" id="filterName" placeholder="Назва лабораторії">
-    <datalist id="partnerList"></datalist>
-    <input list="regionList" id="filterRegion" placeholder="Область">
-    <datalist id="regionList"></datalist>
-    <input list="cityList" id="filterCity" placeholder="Місто">
-    <datalist id="cityList"></datalist>
-    <input list="institutionList" id="filterInstitution" placeholder="ЛПЗ">
-    <datalist id="institutionList"></datalist>
-    <input list="deviceList" id="filterDevice" placeholder="Прилад">
-    <datalist id="deviceList"></datalist>
-    <input list="contractorList" id="filterContractor" placeholder="Контрагент">
-    <datalist id="contractorList"></datalist>
-    <input list="phoneList" id="filterPhone" placeholder="Телефон">
-    <datalist id="phoneList"></datalist>
-    <button onclick="applyFilters()">🔍 Застосувати</button>
-    <button onclick="resetFilters()">♻️ Скинути</button>
-    <button onclick="generateSmartCalendarTasks()">📅 Розумне планування задач</button>
-    <button onclick="showCalendarTasks()">🗓️ Переглянути задачі</button>
-    <a href="./labcard.html" class="add-btn">➕ Додати лабораторію</a>
+  <div>
+    <label>Контрагент:
+      <input type="text" id="filterName" list="partnerList">
+      <datalist id="partnerList"></datalist>
+    </label>
+    <label>Область:
+      <input type="text" id="filterRegion" list="regionList">
+      <datalist id="regionList"></datalist>
+    </label>
+    <label>Місто:
+      <input type="text" id="filterCity" list="cityList">
+      <datalist id="cityList"></datalist>
+    </label>
+    <label>ЛПЗ:
+      <input type="text" id="filterInstitution" list="institutionList">
+      <datalist id="institutionList"></datalist>
+    </label>
+    <label>Прилад:
+      <input type="text" id="filterDevice" list="deviceList">
+      <datalist id="deviceList"></datalist>
+    </label>
+    <label>Контактна особа:
+      <input type="text" id="filterContractor" list="contractorList">
+      <datalist id="contractorList"></datalist>
+    </label>
+    <label>Телефон:
+      <input type="text" id="filterPhone" list="phoneList">
+      <datalist id="phoneList"></datalist>
+    </label>
+    <label>ЄДРПОУ:
+      <input type="text" id="filterEdrpou" list="edrpouList">
+      <datalist id="edrpouList"></datalist>
+    </label>
+    <label>Менеджер:
+      <input type="text" id="filterManager" list="managerList">
+      <datalist id="managerList"></datalist>
+    </label>
+    <button onclick="applyFilters()">🔍 Застосувати фільтри</button>
+    <button onclick="resetFilters()">♻️ Скинути фільтри</button>
+    <a href="./labcard.html"><button>➕ Додати лабораторію</button></a>
   </div>
-  <a href="../calendar/calendar.html">
-  <button>📅 Перейти до календаря задач</button>
-</a>
- <a href="../index.html">
-  <button> Назад</button>
-</a>
+
   <div id="labList"></div>
 
-  <script>
-  let labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
-
-  const uniqueValues = {
-    partner: new Set(), region: new Set(), city: new Set(),
-    institution: new Set(), device: new Set(),
-    contractor: new Set(), phone: new Set()
-  };
-
-  function fillAutocompleteLists() {
-    Object.entries(uniqueValues).forEach(([key, set]) => {
-      const datalist = document.getElementById(`${key}List`);
-      if (!datalist) return;
-      datalist.innerHTML = '';
-      Array.from(set).sort().forEach(value => {
-        const option = document.createElement('option');
-        option.value = value;
-        datalist.appendChild(option);
-      });
-    });
-  }
-
-  function deleteLab(index) {
-    const confirmed = confirm(`❗ Ви точно хочете видалити лабораторію "${labCards[index].partner}"?`);
-    if (confirmed) {
-      labCards.splice(index, 1);
-      localStorage.setItem("labCards", JSON.stringify(labCards));
-      generateSmartCalendarTasks(); // 🔁 автоматично оновлюємо задачі
-      renderLabCards(labCards);
-    }
-  }
-
-  function renderLabCards(filteredLabs) {
-    const container = document.getElementById("labList");
-    container.innerHTML = '';
-    if (filteredLabs.length === 0) {
-      container.innerHTML = "<p>⚠️ Нічого не знайдено за заданими фільтрами.</p>";
-      return;
-    }
-
-    filteredLabs.forEach((lab, index) => {
-      uniqueValues.partner.add(lab.partner);
-      uniqueValues.contractor.add(lab.contractor || "");
-      uniqueValues.region.add(lab.region);
-      uniqueValues.city.add(lab.city);
-      uniqueValues.institution.add(lab.institution);
-      uniqueValues.phone.add(lab.phone || "");
-      lab.devices.forEach(d => uniqueValues.device.add(d.device));
-
-      const div = document.createElement("div");
-      div.className = "lab-card";
-      div.innerHTML = `
-        <h3>${index + 1}. ${lab.partner}</h3>
-        <button onclick="deleteLab(${index})">🗑️ Видалити лабораторію</button>
-        <p>📍 ${lab.region}, ${lab.city}</p>
-        <p>🏥 ${lab.institution}</p>
-        <p>🤝 Контрагент: ${lab.contractor || "—"}</p>
-        <p>📞 Телефон: ${lab.phone || "—"}</p>
-        <ul>
-          ${lab.devices.map((d, i) => `
-            <li>
-              🔧 <strong>${d.device}</strong><br>
-              📅 Продано: ${d.soldDate || "—"}<br>
-              🛠️ Сервіс: ${d.lastService || "—"}<br>
-              🔧 Замінені деталі: ${d.replacedParts || "—"}<br>
-              📦 Закупівля реагентів: ${d.reagentDate || "—"}
-            </li>
-          `).join("")}
-        </ul>
-      `;
-      container.appendChild(div);
-    });
-
-    const calendarBtn = document.createElement("a");
-    calendarBtn.href = "../calendar/calendar.html";
-    calendarBtn.innerHTML = `<button style="margin-top: 20px;">📅 Перейти до календаря задач</button>`;
-    container.appendChild(calendarBtn);
-  }
-
-  function applyFilters() {
-    const name = document.getElementById("filterName").value.toLowerCase();
-    const region = document.getElementById("filterRegion").value.toLowerCase();
-    const city = document.getElementById("filterCity").value.toLowerCase();
-    const institution = document.getElementById("filterInstitution").value.toLowerCase();
-    const device = document.getElementById("filterDevice").value.toLowerCase();
-    const contractor = document.getElementById("filterContractor").value.toLowerCase();
-    const phone = document.getElementById("filterPhone").value.toLowerCase();
-
-    const filtered = labCards.filter(lab => {
-      return (
-        (!name || lab.partner.toLowerCase().includes(name)) &&
-        (!region || lab.region.toLowerCase().includes(region)) &&
-        (!city || lab.city.toLowerCase().includes(city)) &&
-        (!institution || lab.institution.toLowerCase().includes(institution)) &&
-        (!device || lab.devices.some(d => d.device.toLowerCase().includes(device))) &&
-        (!contractor || lab.contractor?.toLowerCase().includes(contractor)) &&
-        (!phone || lab.phone.toLowerCase().includes(phone))
-      );
-    });
-
-    renderLabCards(filtered);
-    fillAutocompleteLists();
-  }
-
-  function resetFilters() {
-    [
-      "filterName","filterRegion","filterCity",
-      "filterInstitution","filterDevice",
-      "filterContractor","filterPhone"
-    ].forEach(id => document.getElementById(id).value = '');
-    renderLabCards(labCards);
-    fillAutocompleteLists();
-  }
-
-  function generateSmartCalendarTasks() {
-    const taskSchedule = {};
-    const tasks = [];
-    const today = new Date();
-    const oneYearLater = new Date(today);
-    oneYearLater.setFullYear(today.getFullYear() + 1);
-
-    const labsByCity = {};
-    labCards.forEach(lab => {
-      if (!labsByCity[lab.city]) labsByCity[lab.city] = [];
-      labsByCity[lab.city].push(lab);
-    });
-
-    Object.entries(labsByCity).forEach(([city, labs]) => {
-      labs.forEach(lab => {
-        const { partner, region } = lab;
-
-        lab.devices.forEach(device => {
-          const { device: deviceName, lastService, reagentDate } = device;
-
-          if (lastService) {
-            let date = new Date(lastService);
-            while (date < oneYearLater) {
-              const scheduledDate = findAvailableDate(date, taskSchedule);
-              const task = {
-                type: "service",
-                title: `🔧 Сервіс: ${deviceName}`,
-                description: `Сервіс приладу ${deviceName} (${partner}, ${city})`,
-                date: scheduledDate,
-                device: deviceName,
-                lab: partner,
-                region,
-                city,
-                status: "заплановано"
-              };
-              tasks.push(task);
-              taskSchedule[scheduledDate] = taskSchedule[scheduledDate] || [];
-              taskSchedule[scheduledDate].push(task);
-              date.setMonth(date.getMonth() + 6);
-            }
-          }
-
-          if (reagentDate) {
-            let date = new Date(reagentDate);
-            while (date < oneYearLater) {
-              const scheduledDate = findAvailableDate(date, taskSchedule);
-              const task = {
-                type: "reagents",
-                title: `📦 Закупівля: ${deviceName}`,
-                description: `Закупити реагенти для ${deviceName} (${partner}, ${city})`,
-                date: scheduledDate,
-                device: deviceName,
-                lab: partner,
-                region,
-                city,
-                status: "заплановано"
-              };
-              tasks.push(task);
-              taskSchedule[scheduledDate] = taskSchedule[scheduledDate] || [];
-              taskSchedule[scheduledDate].push(task);
-              date.setMonth(date.getMonth() + 3);
-            }
-          }
-        });
-      });
-    });
-
-    localStorage.setItem("calendarTasks", JSON.stringify(tasks));
-  }
-
-  function showCalendarTasks() {
-    const tasks = JSON.parse(localStorage.getItem("calendarTasks") || "[]");
-    const modal = document.createElement("div");
-    modal.className = "modal";
-    modal.innerHTML = `
-      <h3>🗓️ Задачі календаря</h3>
-      <ul>
-        ${tasks.map(t => `<li><strong>${t.date}</strong>: ${t.title} — ${t.description}</li>`).join("")}
-      </ul>
-      <button onclick="this.closest('.modal').remove()">❌ Закрити</button>
-    `;
-    document.body.appendChild(modal);
-  }
-
-  function findAvailableDate(startDate, taskSchedule) {
-    let date = new Date(startDate);
-    while (true) {
-      const iso = date.toISOString().split("T")[0];
-      const count = taskSchedule[iso]?.length || 0;
-      if (count < 6 && ![0, 6].includes(date.getDay())) return iso;
-      date.setDate(date.getDate() + 1);
-    }
-  }
-
-  window.addEventListener("DOMContentLoaded", () => {
-    renderLabCards(labCards);
-    fillAutocompleteLists();
-    generateSmartCalendarTasks(); // 🔁 автоматично при завантаженні
-  });
-</script>
-</body> 
+  <script src="./labcards.js"></script>
+</body>
 </html>

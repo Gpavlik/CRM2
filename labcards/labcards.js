@@ -81,40 +81,10 @@ function autoFillIfSingle() {
     document.getElementById("city").value = l.city;
     document.getElementById("lpz").value = l.name;
     document.getElementById("labAddress").value = l.address;
+    document.getElementById("labEdrpou").value = l.edrpou || "";
+    document.getElementById("labManager").value = l.manager || "";
   }
 }
-
-function addDevice() {
-  const container = document.getElementById("devicesContainer");
-  const index = deviceCount++;
-
-  const block = document.createElement("div");
-  block.className = "device-block";
-  block.innerHTML = `
-    <label for="device_${index}">🔧 Назва приладу:</label>
-    <select id="device_${index}">
-      <option value="">Оберіть прилад</option>
-      ${availableCalculators.map(name => `<option value="${name}">${name}</option>`).join("")}
-    </select>
-
-    <label for="soldDate_${index}">📅 Дата продажу:</label>
-    <input type="date" id="soldDate_${index}">
-
-    <label for="lastService_${index}">🛠️ Останній сервіс:</label>
-    <input type="date" id="lastService_${index}">
-
-    <label for="replacedParts_${index}">🔧 Замінені деталі:</label>
-    <input type="text" id="replacedParts_${index}" placeholder="Фільтр, насос">
-
-    <div id="analysisFields_${index}"></div>
-  `;
-  container.appendChild(block);
-
-  document.getElementById(`device_${index}`).addEventListener("change", () => {
-    loadCalculator(index);
-  });
-}
-
 function loadCalculator(index) {
   const deviceName = document.getElementById(`device_${index}`).value.trim();
   if (!deviceName) return;
@@ -145,6 +115,38 @@ function loadCalculator(index) {
     console.error(`❌ Помилка завантаження калькулятора: ${script.src}`);
   };
   document.body.appendChild(script);
+}
+
+
+function addDevice() {
+  const container = document.getElementById("devicesContainer");
+  const index = deviceCount++;
+
+  const block = document.createElement("div");
+  block.className = "device-block";
+  block.innerHTML = `
+    <label for="device_${index}">🔧 Назва приладу:</label>
+    <select id="device_${index}">
+      <option value="">Оберіть прилад</option>
+      ${availableCalculators.map(name => `<option value="${name}">${name}</option>`).join("")}
+    </select>
+
+    <label for="soldDate_${index}">📅 Дата продажу:</label>
+    <input type="date" id="soldDate_${index}">
+
+    <label for="lastService_${index}">🛠️ Останній сервіс:</label>
+    <input type="date" id="lastService_${index}">
+
+    <label for="replacedParts_${index}">🔧 Замінені деталі:</label>
+    <input type="text" id="replacedParts_${index}" placeholder="Фільтр, насос">
+
+    <div id="analysisFields_${index}"></div>
+  `;
+  container.appendChild(block);
+
+  document.getElementById(`device_${index}`).addEventListener("change", () => {
+    loadCalculator(index);
+  });
 }
 
 function renderAnalysisFields(index, config) {
@@ -179,40 +181,93 @@ function renderAnalysisFields(index, config) {
   preview.className = "usage-preview";
   preview.id = `usagePreview_${index}`;
   const financeBtn = document.createElement("button");
-financeBtn.textContent = "📊 Фінансовий аналіз";
-financeBtn.style.marginTop = "10px";
-financeBtn.onclick = () => {
-  const testsInput = document.getElementById(`testCount_${index}`);
-  const priceInput = document.getElementById(`testPrice_${index}`); // додаткове поле, якщо хочеш
+  financeBtn.textContent = "📊 Фінансовий аналіз";
+  financeBtn.style.marginTop = "10px";
+  financeBtn.onclick = () => {
+    const testsInput = document.getElementById(`testCount_${index}`);
+    const priceInput = document.getElementById(`testPrice_${index}`);
 
-  const testsPerDay = parseInt(testsInput?.value) || config.testsPerDay;
-  const testPrice = parseFloat(priceInput?.value) || config.testPrice;
+    const testsPerDay = parseInt(testsInput?.value) || config.testsPerDay;
+    const testPrice = parseFloat(priceInput?.value) || config.testPrice;
 
-  const result = config.calculateFinancials(testsPerDay, testPrice);
+    const result = config.calculateFinancials(testsPerDay, testPrice);
 
-  const modal = document.createElement("div");
-  modal.className = "modal";
-  modal.innerHTML = `
-    <h3>📊 Фінансовий аналіз (${config.deviceName})</h3>
-    <ul>
-      <li>Робочих днів: ${result.workDays}</li>
-      <li>Загальна кількість тестів: ${result.totalTests}</li>
-      <li>Дохід: ${result.annualRevenue.toFixed(2)} грн</li>
-      <li>Витрати на реагенти: ${result.totalReagentCost.toFixed(2)} грн</li>
-      <li>Прибуток: ${result.annualProfit.toFixed(2)} грн</li>
-      <li>Собівартість тесту: ${result.costPerTest.toFixed(2)} грн</li>
-      <li>Окупність: ${result.paybackDay} днів</li>
-      <li>Чистий фінрезультат: ${result.finalNetProfit.toFixed(2)} грн</li>
-    </ul>
-    <button onclick="this.closest('.modal').remove()">❌ Закрити</button>
-  `;
-  document.body.appendChild(modal);
-};
-container.appendChild(financeBtn);
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.innerHTML = `
+      <h3>📊 Фінансовий аналіз (${config.deviceName})</h3>
+      <ul>
+        <li>Робочих днів: ${result.workDays}</li>
+        <li>Загальна кількість тестів: ${result.totalTests}</li>
+        <li>Дохід: ${result.annualRevenue.toFixed(2)} грн</li>
+        <li>Витрати на реагенти: ${result.totalReagentCost.toFixed(2)} грн</li>
+        <li>Прибуток: ${result.annualProfit.toFixed(2)} грн</li>
+        <li>Собівартість тесту: ${result.costPerTest.toFixed(2)} грн</li>
+        <li>Окупність: ${result.paybackDay} днів</li>
+        <li>Чистий фінрезультат: ${result.finalNetProfit.toFixed(2)} грн</li>
+      </ul>
+      <button onclick="this.closest('.modal').remove()">❌ Закрити</button>
+    `;
+    document.body.appendChild(modal);
+  };
+  container.appendChild(financeBtn);
 
   preview.innerText = `💡 Введіть кількість тестів для ${config.deviceName || "приладу"}, щоб побачити витрати.`;
   container.appendChild(preview);
 }
+function renderLabCards(filteredLabs) {
+  const container = document.getElementById("labList");
+  container.innerHTML = '';
+  if (filteredLabs.length === 0) {
+    container.innerHTML = "<p>⚠️ Нічого не знайдено за заданими фільтрами.</p>";
+    return;
+  }
+
+  filteredLabs.forEach((lab, index) => {
+    uniqueValues.partner.add(lab.partner);
+    uniqueValues.contractor.add(lab.contractor || "");
+    uniqueValues.region.add(lab.region);
+    uniqueValues.city.add(lab.city);
+    uniqueValues.institution.add(lab.institution);
+    uniqueValues.phone.add(lab.phone || "");
+    uniqueValues.edrpou.add(lab.edrpou || "");
+    uniqueValues.manager.add(lab.manager || "");
+    lab.devices.forEach(d => uniqueValues.device.add(d.device));
+
+    const div = document.createElement("div");
+    div.className = "lab-card";
+    div.innerHTML = `
+      <h3>${index + 1}. ${lab.partner}</h3>
+      <button onclick="editLabCard(${index})">✏️ Редагувати</button>
+      <button onclick="deleteLab(${index})">🗑️ Видалити</button>
+      <p>📍 ${lab.region}, ${lab.city}</p>
+      <p>🏥 ${lab.institution}</p>
+      <p>📫 Адреса: ${lab.address || "—"}</p>
+      <p>🤝 Контактна особа: ${lab.contractor || "—"}</p>
+      <p>📞 Телефон: ${lab.phone || "—"}</p>
+      <p>🆔 ЄДРПОУ: ${lab.edrpou || "—"}</p>
+      <p>👤 Менеджер: ${lab.manager || "—"}</p>
+      <ul>
+        ${lab.devices.map((d, i) => `
+          <li>
+            🔧 <strong>${d.device}</strong><br>
+            📅 Продано: ${d.soldDate || "—"}<br>
+            🛠️ Сервіс: ${d.lastService || "—"}<br>
+            🔧 Замінені деталі: ${d.replacedParts || "—"}<br>
+            📦 Закупівля реагентів: ${d.reagentDate || "—"}
+          </li>
+        `).join("")}
+      </ul>
+    `;
+    container.appendChild(div);
+  });
+
+  const calendarBtn = document.createElement("a");
+  calendarBtn.href = "../calendar/calendar.html";
+  calendarBtn.innerHTML = `<button style="margin-top: 20px;">📅 Перейти до календаря задач</button>`;
+  container.appendChild(calendarBtn);
+}
+
 function findAvailableDate(startDate, taskSchedule) {
   let date = new Date(startDate);
   while (true) {
@@ -247,7 +302,8 @@ function updateCalendarTasksForLab(lab) {
           device: deviceName,
           lab: lab.partner,
           region: lab.region,
-          city: lab.city
+          city: lab.city,
+          status: "заплановано"
         };
         tasks.push(task);
         taskSchedule[scheduledDate] = taskSchedule[scheduledDate] || [];
@@ -268,7 +324,8 @@ function updateCalendarTasksForLab(lab) {
           device: deviceName,
           lab: lab.partner,
           region: lab.region,
-          city: lab.city
+          city: lab.city,
+          status: "заплановано"
         };
         tasks.push(task);
         taskSchedule[scheduledDate] = taskSchedule[scheduledDate] || [];
@@ -283,13 +340,16 @@ function updateCalendarTasksForLab(lab) {
 
 function saveLabCard() {
   console.log("Збереження...");
-  const partner = document.getElementById("partnerName").value.trim();
-  const region = document.getElementById("region").value.trim();
-  const city = document.getElementById("city").value.trim();
-  const institution = document.getElementById("lpz").value.trim();
-  const address = document.getElementById("labAddress").value.trim();
-  const contractor = document.getElementById("contractor").value.trim();
-  const phone = document.getElementById("phone").value.trim();
+
+  const partner = document.getElementById("partnerName")?.value.trim();
+  const region = document.getElementById("region")?.value.trim();
+  const city = document.getElementById("city")?.value.trim();
+  const institution = document.getElementById("lpz")?.value.trim();
+  const address = document.getElementById("labAddress")?.value.trim();
+  const contractor = document.getElementById("contractor")?.value.trim();
+  const phone = document.getElementById("phone")?.value.trim();
+  const edrpou = document.getElementById("labEdrpou")?.value.trim();
+  const manager = document.getElementById("labManager")?.value.trim();
 
   const devices = [];
 
@@ -303,7 +363,7 @@ function saveLabCard() {
       lastService: document.getElementById(`lastService_${i}`)?.value || null,
       replacedParts: document.getElementById(`replacedParts_${i}`)?.value.trim() || null,
       testCount: document.getElementById(`testCount_${i}`)?.value || null,
-            reagentCount: document.getElementById(`reagentCount_${i}`)?.value || null,
+      reagentCount: document.getElementById(`reagentCount_${i}`)?.value || null,
       reagentDate: document.getElementById(`reagentDate_${i}`)?.value || null,
       analyses: {}
     };
@@ -322,6 +382,11 @@ function saveLabCard() {
     devices.push(device);
   }
 
+  if (!partner || !region || !city || !institution) {
+    alert("⚠️ Заповніть обов'язкові поля: Контрагент, Область, Місто, ЛПЗ.");
+    return;
+  }
+
   const labCard = {
     partner,
     region,
@@ -330,6 +395,8 @@ function saveLabCard() {
     address,
     contractor,
     phone,
+    edrpou,
+    manager,
     devices
   };
 
@@ -350,3 +417,6 @@ function saveLabCard() {
   alert("✅ Лабораторію збережено і задачі оновлено!");
   window.location.href = "./index.html";
 }
+
+  
+
