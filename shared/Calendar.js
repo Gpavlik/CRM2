@@ -1,4 +1,12 @@
-export function generateEvents({ device, partner, soldDate, testsPerDay, reagents, serviceIntervalDays = 90, replacementAfterDays = 365 }) {
+export function generateEvents({
+  device,
+  partner,
+  soldDate,
+  testsPerDay,
+  reagents,
+  serviceIntervalDays = 90,
+  replacementAfterDays = 365
+}) {
   const events = [];
   const startDate = new Date(soldDate);
 
@@ -7,7 +15,7 @@ export function generateEvents({ device, partner, soldDate, testsPerDay, reagent
     const dailyUsage = r.usagePerTest * testsPerDay;
     const daysToDepletion = Math.floor(r.volume / dailyUsage);
     const depletionDate = new Date(startDate);
-    depletionDate.setDate(depletionDate.getDate() + daysToDepletion - 5); // буфер 5 днів
+    depletionDate.setDate(depletionDate.getDate() + daysToDepletion - 5);
 
     events.push({
       date: depletionDate.toISOString().split("T")[0],
@@ -47,7 +55,20 @@ export function generateEvents({ device, partner, soldDate, testsPerDay, reagent
 
   return events;
 }
-function generateEventsFromLabCards() {
+
+function getNextDeliveryDate() {
+  const today = new Date();
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  return nextMonth.toISOString().split("T")[0];
+}
+
+function getDeliveryDate() {
+  const today = new Date();
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  return nextMonth.toISOString().split("T")[0];
+}
+
+export function generateEventsFromLabCards() {
   const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
   const events = [];
 
@@ -59,7 +80,7 @@ function generateEventsFromLabCards() {
           .join(", ");
 
         events.push({
-          date: getNextDeliveryDate(), // або фіксована дата
+          date: getNextDeliveryDate(),
           title: `🔬 ${r.name} — ${r.count} тестів`,
           description: `📦 Витрата: ${reagentList}`,
           lab: lab.partner,
@@ -72,42 +93,7 @@ function generateEventsFromLabCards() {
   return events;
 }
 
-function getNextDeliveryDate() {
-  const today = new Date();
-  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  return nextMonth.toISOString().split("T")[0];
-}
-function generateCalendarTasks() {
-  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
-  const tasks = [];
-
-  labCards.forEach(lab => {
-    lab.devices.forEach(device => {
-      device.reagents.forEach(r => {
-        const reagentList = Object.entries(r.usage)
-          .map(([name, amount]) => `${name}: ${amount.toFixed(2)} мл`)
-          .join(", ");
-
-        tasks.push({
-          date: getDeliveryDate(), // наприклад, перше число наступного місяця
-          title: `🔬 ${r.name} — ${r.count} тестів`,
-          description: `📦 ${reagentList}`,
-          lab: lab.partner,
-          device: device.device
-        });
-      });
-    });
-  });
-
-  return tasks;
-}
-function getDeliveryDate() {
-  const today = new Date();
-  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  return nextMonth.toISOString().split("T")[0]; // формат YYYY-MM-DD
-}
-
-function generateCalendarTasks() {
+export function generateCalendarTasks() {
   const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
   const tasks = [];
 
@@ -135,7 +121,7 @@ function generateCalendarTasks() {
   return tasks;
 }
 
-function updateTask(updatedTask) {
+export function updateTask(updatedTask) {
   const tasks = JSON.parse(localStorage.getItem("calendarTasks")) || [];
   const index = tasks.findIndex(t => t.id === updatedTask.id);
   if (index !== -1) {
@@ -144,6 +130,35 @@ function updateTask(updatedTask) {
   }
 }
 
+export async function processVisitReport(visitReports) {
+  const allLabs = JSON.parse(localStorage.getItem("labCards") || "[]");
+
+  const updatedLabs = typeof window.applyFieldUpdatesFromVisits === "function"
+    ? window.applyFieldUpdatesFromVisits(allLabs, visitReports)
+    : allLabs;
+
+  const newVisits = await window.generateAllLabVisits(updatedLabs);
+
+  localStorage.setItem("labCards", JSON.stringify(updatedLabs));
+
+  const calendarTasks = newVisits.flatMap((visit, vIndex) =>
+    visit.tasks.map((t, tIndex) => ({
+      id: `visit_${vIndex}_${tIndex}_${Date.now()}`,
+      date: visit.date,
+      title: `🔬 ${t.device} — ${t.priority} ${t.action}`,
+      description: `${t.action} для ${t.device}`,
+      lab: visit.lab,
+      device: t.device,
+      status: "заплановано"
+    }))
+  );
+
+  localStorage.setItem("calendarTasks", JSON.stringify(calendarTasks));
+
+  if (typeof window.renderFullCalendar === "function") {
+    window.renderFullCalendar();
+  }
+}
 
 export default {
   calculateFinancials({

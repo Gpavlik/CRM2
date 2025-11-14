@@ -1,6 +1,7 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="uk">
 <head>
+  <link rel="icon" href="data:,">
   <meta charset="UTF-8">
   <title>🧪 Лабораторна картка</title>
   <style>
@@ -10,6 +11,17 @@
     .device-block { background: #fff; padding: 10px; margin: 10px 0; border-left: 4px solid #0077cc; border-radius: 5px; }
     button { margin-top: 15px; padding: 10px 15px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
     button:hover { background: #005fa3; }
+    .priority-red {
+  color: #d00;
+  font-weight: bold;
+}
+.priority-yellow {
+  color: #e67e00;
+}
+.priority-green {
+  color: #007f00;
+}
+
   </style>
 </head>
 <body>
@@ -50,22 +62,39 @@
   <button id="addDeviceBtn">➕ Додати прилад</button>
   <button id="saveLabBtn">💾 Зберегти</button>
 
-  <script src="./labcards.js"></script>
+<script src="logistics.js"></script>
+<script src="labcards.js"></script>
   <script>
+    
     window.addEventListener("DOMContentLoaded", () => {
-      loadLPZList();
+      if (typeof loadLPZList === "function") loadLPZList();
 
-      document.getElementById("addDeviceBtn").addEventListener("click", () => {
-        if (typeof addDevice === "function") addDevice();
-      });
+      const addBtn = document.getElementById("addDeviceBtn");
+      if (addBtn) {
+        addBtn.addEventListener("click", () => {
+          if (typeof addDevice === "function") addDevice();
+        });
+      }
 
-      document.getElementById("saveLabBtn").addEventListener("click", () => {
-        if (typeof saveLabCard === "function") saveLabCard();
-      });
+      const saveBtn = document.getElementById("saveLabBtn");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", () => {
+          if (typeof saveLabCard === "function") saveLabCard();
+        });
+      }
 
-      document.getElementById("region").addEventListener("input", onRegionInput);
-      document.getElementById("city").addEventListener("input", onCityInput);
-      document.getElementById("lpz").addEventListener("input", onLPZInput);
+      document.getElementById("region")?.addEventListener("input", onRegionInput);
+      document.getElementById("city")?.addEventListener("input", onCityInput);
+      document.getElementById("lpz")?.addEventListener("input", onLPZInput);
+
+      fetch("../calculators/kp-list.json")
+        .then(res => res.json())
+        .then(data => {
+          data.forEach(entry => {
+            kpListByDevice[entry.device] = entry.KP;
+          });
+        })
+        .catch(err => console.warn("⚠️ Не вдалося завантажити kp-list.json", err));
     });
   </script>
 </body>

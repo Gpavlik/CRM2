@@ -78,11 +78,15 @@
     <a href="../labcards/index.html">
       <button style="margin-left: 20px;">🏥 Перейти до лабораторій</button>
     </a>
+    <button onclick="insertVisitFromLabcards()">📥 Додати візит із лабораторій</button>
   </div>
 
   <div id="fullCalendar"></div>
+<script type="module" src="../labcards/labcards.js"></script>
+<script type="module" src="../labcards/logistics.js"></script>
+<script type="module" src="../shared/Calendar.js"></script>
 
-  <script>
+ <script>
     function loadCalendarTasks() {
       return JSON.parse(localStorage.getItem("calendarTasks") || "[]");
     }
@@ -228,6 +232,33 @@
       });
 
       calendar.render();
+    }
+
+    function insertVisitFromLabcards() {
+      const visitData = sessionStorage.getItem("newVisit");
+      if (!visitData) {
+        alert("Немає нового візиту для додавання.");
+        return;
+      }
+
+      const visit = JSON.parse(visitData);
+      const tasks = visit.tasks || [];
+
+      const calendarTasks = loadCalendarTasks();
+      const newTasks = tasks.map((t, i) => ({
+        id: `${visit.labId}_${i}_${Date.now()}`,
+        title: `🔬 ${t.device} — ${t.priority} ${t.action}`,
+        date: visit.date,
+        description: `${t.action} для ${t.device}`,
+        lab: visit.labId,
+        device: t.device,
+        status: "заплановано"
+      }));
+
+            const updatedTasks = [...calendarTasks, ...newTasks];
+      localStorage.setItem("calendarTasks", JSON.stringify(updatedTasks));
+      sessionStorage.removeItem("newVisit");
+      renderFullCalendar();
     }
 
     window.addEventListener("DOMContentLoaded", renderFullCalendar);

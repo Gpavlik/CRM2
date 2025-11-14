@@ -5,17 +5,61 @@
   <title>🧪 Лабораторії</title>
   <style>
     body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+    h2 { margin-bottom: 20px; }
     label { display: inline-block; margin: 10px 10px 0 0; font-weight: bold; }
     input { padding: 6px; margin-top: 5px; }
-    .lab-card { background: #fff; padding: 10px; margin: 10px 0; border-left: 4px solid #0077cc; border-radius: 5px; }
-    button { margin-top: 10px; padding: 8px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    button:hover { background: #005fa3; }
+    button { margin: 5px; padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+
+    .lab-card {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .lab-actions {
+      margin: 10px 0;
+    }
+
+    .lab-actions button {
+      margin-right: 8px;
+    }
+
+    .lab-actions button:first-child {
+      background: #4caf50;
+      color: white;
+    }
+
+    .lab-actions button:last-child {
+      background: #f44336;
+      color: white;
+    }
+
+    .priority-red { color: #f44336; font-weight: bold; }
+    .priority-yellow { color: #ff9800; font-weight: bold; }
+    .priority-green { color: #4caf50; font-weight: bold; }
+
+    .task-list ul {
+      margin-left: 20px;
+      list-style-type: disc;
+    }
+
+    .filter-bar {
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 <body>
   <h2>🧪 Список лабораторій</h2>
 
-  <div>
+  <!-- Панель фільтрів -->
+  <div class="filter-bar">
     <label>Контрагент:
       <input type="text" id="filterName" list="partnerList">
       <datalist id="partnerList"></datalist>
@@ -52,13 +96,104 @@
       <input type="text" id="filterManager" list="managerList">
       <datalist id="managerList"></datalist>
     </label>
+    <br>
     <button onclick="applyFilters()">🔍 Застосувати фільтри</button>
     <button onclick="resetFilters()">♻️ Скинути фільтри</button>
     <a href="./labcard.html"><button>➕ Додати лабораторію</button></a>
+    <button onclick="planAllVisits()">📅 Запланувати всі візити</button>
   </div>
 
+  <!-- Список лабораторій -->
   <div id="labList"></div>
-
+<script src="./logistics.js"></script>
   <script src="./labcards.js"></script>
+  <script src="../shared/Calendar.js"></script>
+
+  <script>
+    window.onload = () => {
+      const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+      renderLabCards(labCards);
+    };
+
+    function renderLabCards(labs) {
+      const container = document.getElementById("labList");
+      container.innerHTML = "";
+
+      if (!labs.length) {
+        container.innerHTML = "<p>⚠️ Лабораторій не знайдено.</p>";
+        return;
+      }
+
+      labs.forEach((lab, index) => {
+        const card = document.createElement("div");
+        card.className = "lab-card";
+        card.innerHTML = `
+          <h3>${index + 1}. ${lab.partner} (${lab.city})</h3>
+          <p>🏥 ${lab.institution}</p>
+          <p>📟 Прилади: ${lab.devices.map(d => d.device).join(", ")}</p>
+          <p>🤝 Контакт: ${lab.contractor || "—"} 📞 ${lab.phone || "—"}</p>
+          <p>👤 Менеджер: ${lab.manager || "—"}</p>
+          <div class="lab-actions">
+            <button onclick="editLabCard(${index})">✏️ Редагувати</button>
+            <button onclick="deleteLab(${index})">🗑️ Видалити</button>
+            <button onclick="createVisit('${lab.id}')">📅 Створити візит</button>
+          </div>
+          ${lab.tasks?.length ? `
+            <h4>🗓️ Прев’ю задач:</h4>
+            <ul class="task-list">
+              ${lab.tasks.map(task => {
+                const taskDate = new Date(task.date);
+                const today = new Date();
+                const urgentThreshold = new Date();
+                urgentThreshold.setDate(today.getDate() + 7);
+
+                let priorityClass = "priority-green";
+                if (taskDate < today) priorityClass = "priority-red";
+                else if (taskDate <= urgentThreshold) priorityClass = "priority-yellow";
+
+                const subtasks = task.tasks?.map(sub => `<li>${sub.priority} ${sub.action} (${sub.device})</li>`).join("");
+
+                return `
+                  <li class="${priorityClass}">
+                    <strong>${task.date}</strong>: ${task.title}
+                    ${subtasks ? `<ul>${subtasks}</ul>` : ""}
+                  </li>
+                `;
+              }).join("")}
+            </ul>
+          ` : ""}
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function createVisit(labId) {
+      const visitDate = sessionStorage.getItem("visitDate");
+      if (!visitDate) {
+        alert("⚠️ Дата візиту не задана. Перейдіть через календар.");
+        return;
+      }
+
+      const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+      const lab = labCards.find(l => l.id === labId);
+      if (!lab) return;
+
+      const tasks = await generateDeviceTasksWithDueDates(lab);
+
+      const visit = {
+        labId,
+        date: visitDate,
+        tasks
+      };
+
+      sessionStorage.setItem("newVisit", JSON.stringify(visit));
+      window.location.href = "../calendar.html";
+    }
+
+    async function planAllVisits() {
+      await processVisitReport([]); // перерахунок без звітів
+      window.location.href = "../calendar.html"; // повернення до календаря
+    }
+  </script>
 </body>
 </html>

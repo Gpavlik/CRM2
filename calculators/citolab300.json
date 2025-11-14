@@ -1,0 +1,39 @@
+{
+  "deviceName": "Citolab-300",
+  "testsPerDay": 20,
+  "testPrice": 120,
+  "reagents": [
+    {
+      "name": "CITOLAB™ 10 М",
+      "startup": 0,
+      "shutdown": 0,
+      "perTest": 1,
+      "packageSize": 100,
+      "price": 926.8
+    },
+    {
+      "name": "CITOLAB™ 11 М",
+      "startup": 0,
+      "shutdown": 0,
+      "perTest": 1,
+      "packageSize": 100,
+      "price": 993.5
+    },
+    {
+      "name": "CITOLAB™ 10 МAC",
+      "startup": 0,
+      "shutdown": 0,
+      "perTest": 1,
+      "packageSize": 100,
+      "price": 733.5
+    },
+    {
+      "name": "Калібровочні смужки",
+      "startup": 0.05,
+      "shutdown": 0,
+      "perTest": 0,
+      "packageSize": 25,
+      "price": 212.7
+    }
+  ]
+}
