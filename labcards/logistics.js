@@ -63,13 +63,13 @@ export async function findNearbyAvailableDate(taskCity, taskSchedule, token = OR
       }
     }
 
-    if (hasSpace && nearby) return key;
-    if (!fallbackDate && hasSpace) fallbackDate = key;
+    if (hasSpace && nearby) return new Date(candidate);   // ✅ повертаємо Date
+    if (!fallbackDate && hasSpace) fallbackDate = new Date(candidate); // ✅ зберігаємо Date
 
     candidate.setDate(candidate.getDate() + 1);
   }
 
-  return fallbackDate || candidate.toISOString().split("T")[0];
+  return fallbackDate || candidate; // ✅ завжди Date
 }
 
 

@@ -3,8 +3,16 @@ let filteredList = [];
 const calculators = {};
 let kpListByDevice = {};
 let deviceCount = 0;
+let taskSchedule = {}; // глобальний об’єкт для збереження розкладу
+
 const availableCalculators = ["LS-1100", "DF-50", "UN-73", "Citolab-300", "DH-36"];
-const scheduledDate = await window.findNearbyAvailableDate(city, taskSchedule, window.ORS_TOKEN, baseDate);
+
+import { findNearbyAvailableDate, ORS_TOKEN } from "./logistics.js";
+
+// ❌ не викликаємо тут findNearbyAvailableDate
+// ✅ викликати треба всередині generateMonthlyLabVisits або іншої функції,
+// де вже відомі city і baseDate
+
 
 const uniqueValues = {
   partner: new Set(),
@@ -20,14 +28,15 @@ const uniqueValues = {
 
 function loadLPZList() {
   fetch("./lpzlist.json")
-    .then(res => res.json())
-    .then(data => {
-      lpzList = data;
-      filteredList = [...lpzList];
-      updateRegionList();
-      updateCityList();
-      updateLPZList();
-    });
+  .then(res => res.json())
+  .then(data => {
+    console.log("LPZ list loaded:", data);
+    lpzList = data;
+    filteredList = [...lpzList];
+    updateRegionList();
+    updateCityList();
+    updateLPZList();
+  });
 }
 
 function updateRegionList() {
@@ -102,9 +111,9 @@ function autoFillIfSingle() {
     document.getElementById("labManager").value = l.manager || "";
   }
 }
-function addDevice() {
+function addDevice(index = null, prefill = null) {
   const container = document.getElementById("devicesContainer");
-  const index = deviceCount++;
+  if (index === null) index = deviceCount++;
 
   const block = document.createElement("div");
   block.className = "device-block";
@@ -148,8 +157,9 @@ function addDevice() {
   `;
   container.appendChild(block);
 
+  // Автозавантаження КП
   document.getElementById(`device_${index}`).addEventListener("change", () => {
-    loadCalculator(index);
+    loadCalculator(index, prefill); // передаємо prefill у loadCalculator
     const deviceName = document.getElementById(`device_${index}`).value;
     const kpOptions = kpListByDevice[deviceName] || [];
     const kpSelect = document.getElementById(`kpSelect_${index}`);
@@ -157,29 +167,70 @@ function addDevice() {
       kpOptions.map(kp => `<option value="${kp}">${kp}</option>`).join("");
   });
 
+  // Показати поле замінених деталей
   document.getElementById(`workType_${index}`).addEventListener("change", (e) => {
     const show = e.target.value === "заміна деталей";
     document.getElementById(`replacedPartsBlock_${index}`).style.display = show ? "block" : "none";
   });
 
+  // Видалення блоку
   document.getElementById(`removeDevice_${index}`).addEventListener("click", () => {
     block.remove();
   });
-}
 
-function loadCalculator(index) {
+  // Якщо є дані для заповнення (редагування)
+  if (prefill) {
+    // базові поля
+    document.getElementById(`device_${index}`).value = prefill.device || "";
+    document.getElementById(`soldDate_${index}`).value = prefill.soldDate || "";
+    document.getElementById(`lastService_${index}`).value = prefill.lastService || "";
+    document.getElementById(`workType_${index}`).value = prefill.workType || "";
+    document.getElementById(`replacedParts_${index}`).value = prefill.replacedParts || "";
+    document.getElementById(`kpSelect_${index}`).value = prefill.kp || "";
+    document.getElementById(`testCount_${index}`).value = prefill.testCount || 0;
+
+    if (prefill.workType === "заміна деталей") {
+      document.getElementById(`replacedPartsBlock_${index}`).style.display = "block";
+    }
+
+    // викликаємо loadCalculator з prefill, щоб він заповнив аналізи/реагенти після рендера
+    loadCalculator(index, prefill);
+  }
+}
+function loadCalculator(index, prefill = null) {
   const deviceName = document.getElementById(`device_${index}`)?.value?.trim();
   if (!deviceName) return;
 
   const key = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 
-  if (calculators[key]) {
-    const config = calculators[key];
+  const applyPrefill = (config) => {
     renderTestCountField(index, config);
     renderReagentFields(index, config);
     if (deviceName === "LS-1100") {
       renderAnalysisFields(index, config);
     }
+
+    // після рендера заповнюємо prefill
+    if (prefill) {
+      if (prefill.analyses) {
+        Object.keys(prefill.analyses).forEach(name => {
+          const input = document.getElementById(`analysis_${index}_${name}`);
+          if (input) input.value = prefill.analyses[name];
+        });
+      }
+      if (prefill.reagentsInfo) {
+        Object.keys(prefill.reagentsInfo).forEach(rName => {
+          const countEl = document.getElementById(`reagentCount_${index}_${rName}`);
+          const dateEl = document.getElementById(`reagentDate_${index}_${rName}`);
+          if (countEl) countEl.value = prefill.reagentsInfo[rName].lastOrderCount || "";
+          if (dateEl) dateEl.value = prefill.reagentsInfo[rName].lastOrderDate || "";
+        });
+      }
+    }
+  };
+
+  if (calculators[key]) {
+    applyPrefill(calculators[key]);
     return;
   }
 
@@ -187,16 +238,13 @@ function loadCalculator(index) {
     .then(res => res.json())
     .then(config => {
       calculators[key] = config;
-      renderTestCountField(index, config);
-      renderReagentFields(index, config);
-      if (deviceName === "LS-1100") {
-        renderAnalysisFields(index, config);
-      }
+      applyPrefill(config);
     })
     .catch(err => {
       console.error(`❌ Не вдалося завантажити калькулятор: ${key}.json`, err);
     });
 }
+
 
 function renderTestCountField(index, config) {
   const container = document.getElementById(`deviceBlock_${index}`);
@@ -243,50 +291,74 @@ function renderAnalysisFields(index, config) {
     container.appendChild(row);
   });
 }
+function toISODateLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
+function isWeekend(date) {
+  const day = date.getDay(); // 0=Нд, 6=Сб
+  return day === 0 || day === 6;
+}
+
+function nextWorkingDay(date) {
+  const d = new Date(date);
+  while (isWeekend(d)) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+// Опціонально: преференція вівторок-четвер
+function preferTueThu(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 2=Вт, 3=Ср, 4=Чт
+  if (day === 2 || day === 3 || day === 4) return d;
+  // зсуваємо вперед до найближчого Вт/Ср/Чт
+  while (![2,3,4].includes(d.getDay())) d.setDate(d.getDate() + 1);
+  return d;
+}
 
 async function generateDeviceTasksWithDueDates(lab) {
   const tasks = [];
-  const baseDate = new Date(lab.saveDate || new Date()); // дата збереження/редагування
+  const baseDate = new Date(lab.saveDate || new Date());
   const endDate = new Date(baseDate);
-  endDate.setFullYear(endDate.getFullYear() + 1); // формуємо на рік вперед
+  endDate.setFullYear(endDate.getFullYear() + 1);
 
   for (const device of lab.devices) {
     const { device: deviceName, testCount } = device;
     const configKey = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
     const config = calculators[configKey];
-    if (!config || !config.reagents || config.reagents.length === 0) continue;
+    if (!config || !config.reagents?.length) continue;
 
-    // цикл по місяцях протягом року
     for (let i = 1; i <= 12; i++) {
-      const visitDate = new Date(baseDate);
-      visitDate.setMonth(visitDate.getMonth() + i);
+      const due = new Date(baseDate);
+      due.setMonth(due.getMonth() + i);
 
-      // ✅ сервісні задачі раз на квартал
+      // Сервіс — раз на квартал
       if (i % 3 === 0) {
         tasks.push({
           lab: lab.partner,
           city: lab.city,
           device: deviceName,
           taskType: "service",
-          dueDate: visitDate, // зберігаємо як Date
+          dueDate: due,
           source: "auto"
         });
       }
 
-      // ✅ задачі по реагентах щомісяця
+      // Реагенти — щомісяця
       for (const r of config.reagents) {
         const perTest = Number(r.perTest);
         const startup = Number(r.startup) || 0;
         const shutdown = Number(r.shutdown) || 0;
         const volume = Number(r.packageSize);
-
         if (!perTest || !volume) continue;
 
+        // Якщо хочеш змінність — заміни на monthlyTests логіку
         const daily = perTest * testCount + startup + shutdown;
         if (!daily || daily <= 0) continue;
 
-        // розрахунок кількості упаковок на місяць
         const neededQuantity = Math.ceil((daily * 30) / volume);
 
         tasks.push({
@@ -296,29 +368,25 @@ async function generateDeviceTasksWithDueDates(lab) {
           taskType: "reagents",
           reagentName: r.name,
           neededQuantity,
-          dueDate: visitDate, // зберігаємо як Date
+          dueDate: due,
           source: "auto"
         });
       }
     }
   }
 
-  // 🔧 порівнюємо дати коректно
   return tasks.filter(t => t.dueDate <= endDate);
 }
 
-
 async function generateMonthlyLabVisits(allDeviceTasks) {
   const visitsByLab = {};
-  const taskSchedule = {};
+  
   const today = new Date();
 
-  // 🔧 групуємо задачі по лабораторіях
   for (const task of allDeviceTasks) {
-    const { lab, city } = task;
-    const labKey = `${lab}__${city}`;
+    const labKey = `${task.lab}__${task.city}`;
     if (!visitsByLab[labKey]) visitsByLab[labKey] = [];
-    visitsByLab[labKey].push(task); // зберігаємо повний task
+    visitsByLab[labKey].push(task);
   }
 
   const monthlyVisits = [];
@@ -326,17 +394,15 @@ async function generateMonthlyLabVisits(allDeviceTasks) {
   for (const labKey in visitsByLab) {
     const [labName, city] = labKey.split("__");
     const tasks = visitsByLab[labKey];
-
     const buckets = {};
 
     for (const t of tasks) {
-      // 🔧 плануємо візит за 2 тижні до дедлайну
-      const visitDate = new Date(t.dueDate);
-      visitDate.setDate(visitDate.getDate() - 14);
+      const p = new Date(t.dueDate);
+      p.setDate(p.getDate() - 14); // базово: за 2 тижні до дедлайну
 
-      const year = visitDate.getFullYear();
-      const month = visitDate.getMonth(); // 0–11
-      const key = `${year}-${month}`;
+      // корекція на робочий день і преференції
+      const planned = preferTueThu(nextWorkingDay(p));
+      const key = `${planned.getFullYear()}-${planned.getMonth()}`; // по місяцях
 
       if (!buckets[key]) buckets[key] = [];
       buckets[key].push(t);
@@ -344,24 +410,32 @@ async function generateMonthlyLabVisits(allDeviceTasks) {
 
     for (const monthKey in buckets) {
       const visitTasks = buckets[monthKey];
-      const [year, month] = monthKey.split("-");
-      const baseDate = new Date(Number(year), Number(month), 15); // 🔧 середина місяця
 
-      // 🔧 використовуємо ISO-рядок як ключ для taskSchedule
-      const scheduledDate = await findNearbyAvailableDate(city, taskSchedule, ORS_TOKEN, baseDate);
-      const scheduleKey = new Date(scheduledDate).toISOString().split("T")[0];
-      taskSchedule[scheduleKey] = [...(taskSchedule[scheduleKey] || []), { city }];
+      // одна узгоджена дата для цього "місяця" (беремо найранішу з bucket і нормалізуємо)
+      const preferredDate = visitTasks
+        .map(t => {
+          const p = new Date(t.dueDate);
+          p.setDate(p.getDate() - 14);
+          return preferTueThu(nextWorkingDay(p));
+        })
+        .sort((a, b) => a - b)[0];
 
+      // якщо є логістична перевірка вільних дат — застосуй її після нормалізації:
+      const scheduledDate = await findNearbyAvailableDate(city, taskSchedule, ORS_TOKEN, preferredDate);
+
+      const dateStr = toISODateLocal(scheduledDate);
+
+      // Пріоритети по дедлайну кожної підзадачі
       const visit = {
         type: "labVisit",
         title: `🔍 Візит до лабораторії ${labName}`,
-        date: scheduleKey,
+        date: dateStr,
         lab: labName,
         city,
         tasks: visitTasks.map(t => {
-          const delta = (t.dueDate - today) / (1000 * 60 * 60 * 24);
+          const delta = Math.round((t.dueDate - today) / (1000 * 60 * 60 * 24));
           let priority = "🟢";
-          if (delta <= 0) priority = "🔴";
+          if (delta <= 10) priority = "🔴";
           else if (delta <= 30) priority = "🟡";
 
           return {
@@ -378,8 +452,11 @@ async function generateMonthlyLabVisits(allDeviceTasks) {
     }
   }
 
+  // сортуємо візити за датою
+  monthlyVisits.sort((a, b) => new Date(a.date) - new Date(b.date));
   return monthlyVisits;
 }
+
 
 
 
@@ -552,26 +629,27 @@ async function saveLabCard() {
     }
   });
 }
-
-
+// ✅ Видалення з localStorage — без глобальної змінної
 function deleteLab(index) {
   if (!confirm("❌ Ви впевнені, що хочете видалити цю лабораторію?")) return;
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
   labCards.splice(index, 1);
   localStorage.setItem("labCards", JSON.stringify(labCards));
-  renderLabCards(labCards);
+  renderLabCards(labCards); // оновлюємо рендер після видалення
 }
 
+// ✅ Редагування — збереження індексу й перехід
 function editLabCard(index) {
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
   const lab = labCards[index];
   localStorage.setItem("editLabCard", JSON.stringify({ index, lab }));
   window.location.href = "./labcard.html";
 }
-
 function renderLabCards(filteredLabs) {
   const container = document.getElementById("labList");
   container.innerHTML = '';
 
-  // 🔧 Панель фільтрів
+  // Панель фільтрів
   const filterBar = document.createElement("div");
   filterBar.className = "filter-bar";
   filterBar.innerHTML = `
@@ -598,15 +676,16 @@ function renderLabCards(filteredLabs) {
     return;
   }
 
-  // 🔧 Рендер карток лабораторій
+  // Картки
   filteredLabs.forEach((lab, index) => {
     const div = document.createElement("div");
     div.className = "lab-card";
     div.innerHTML = `
       <h3>${index + 1}. ${lab.partner}</h3>
       <div class="lab-actions">
-        <button onclick="editLabCard(${index})">✏️ Редагувати</button>
-        <button onclick="deleteLab(${index})">🗑️ Видалити</button>
+        <button class="edit-btn">✏️ Редагувати</button>
+        <button class="delete-btn">🗑️ Видалити</button>
+        <button class="visit-btn">📅 Запланувати візит</button>
       </div>
       <p>📍 ${lab.region}, ${lab.city}</p>
       <p>🏥 ${lab.institution}</p>
@@ -651,13 +730,53 @@ function renderLabCards(filteredLabs) {
       ` : ""}
     `;
     container.appendChild(div);
+
+    div.querySelector(".edit-btn").addEventListener("click", () => editLabCard(index));
+    div.querySelector(".delete-btn").addEventListener("click", () => deleteLab(index));
+    div.querySelector(".visit-btn").addEventListener("click", () => openVisitPicker(index));
   });
 
-  // 🔧 Кнопка переходу до календаря
+  // Перейти до календаря
   const calendarBtn = document.createElement("div");
   calendarBtn.className = "calendar-btn";
   calendarBtn.innerHTML = `<a href="../calendar/calendar.html"><button>📅 Перейти до календаря задач</button></a>`;
   container.appendChild(calendarBtn);
+}
+
+// якщо модулі — експортуй
+
+
+function manualVisit(index) {
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+  const lab = labCards[index];
+  if (!lab) return;
+
+  const date = prompt(`📅 Вкажіть дату візиту для ${lab.partner} (${lab.city}) у форматі YYYY-MM-DD:`);
+  if (!date) return;
+
+  // Перевірка формату
+  const parsed = new Date(date);
+  if (isNaN(parsed)) {
+    alert("❌ Невірний формат дати. Використовуйте YYYY-MM-DD.");
+    return;
+  }
+
+  // Створюємо задачу-візит
+  const visit = {
+    type: "manualVisit",
+    title: `🔍 Візит до лабораторії ${lab.partner}`,
+    date: date,
+    lab: lab.partner,
+    city: lab.city,
+    tasks: [] // можна додати пустий масив або базові дії
+  };
+
+  // Зберігаємо у календар
+  let calendarTasks = JSON.parse(localStorage.getItem("calendarTasks") || "[]");
+  calendarTasks.push(visit);
+  localStorage.setItem("calendarTasks", JSON.stringify(calendarTasks));
+
+  alert(`✅ Візит до ${lab.partner} (${lab.city}) заплановано на ${date}`);
 }
 
 function applyFilters() {
@@ -756,8 +875,57 @@ function showTaskPreviewBeforeSave(labCard, visits, onConfirm) {
     onConfirm();
   });
 }
+function openVisitPicker(index) {
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+  const lab = labCards[index];
+  if (!lab) return;
 
+  const modal = document.getElementById("visitModal");
+  const info = document.getElementById("visitModalInfo");
+  const dateInput = document.getElementById("visitDate");
+  const confirmBtn = document.getElementById("visitConfirmBtn");
+  const cancelBtn = document.getElementById("visitCancelBtn");
 
+  info.textContent = `${lab.partner} — ${lab.city}`;
+  // за замовчуванням завтра, без вихідних за бажанням
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  dateInput.value = toISODateLocal(tomorrow);
+
+  modal.style.display = "flex";
+
+  const cleanup = () => {
+    modal.style.display = "none";
+    confirmBtn.replaceWith(confirmBtn.cloneNode(true)); // прибрати подвійні слухачі
+    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+  };
+
+  confirmBtn.addEventListener("click", () => {
+    const date = dateInput.value;
+    if (!date) { alert("❌ Виберіть дату."); return; }
+
+    // додаємо задачу в календар
+    const visit = {
+      type: "manualVisit",
+      title: `🔍 Візит до лабораторії ${lab.partner}`,
+      date,
+      lab: lab.partner,
+      city: lab.city,
+      tasks: []
+    };
+
+    const calendarTasks = JSON.parse(localStorage.getItem("calendarTasks") || "[]");
+    calendarTasks.push(visit);
+    localStorage.setItem("calendarTasks", JSON.stringify(calendarTasks));
+
+    alert(`✅ Візит заплановано на ${date}`);
+    cleanup();
+  });
+
+  cancelBtn.addEventListener("click", cleanup);
+}
+
+window.openVisitPicker = openVisitPicker;
 window.onRegionInput = onRegionInput;
 window.onCityInput = onCityInput;
 window.onLPZInput = onLPZInput;
@@ -772,3 +940,15 @@ window.applyFieldUpdatesFromVisits = applyFieldUpdatesFromVisits;
 window.processVisitReport = processVisitReport;
 window.generateDeviceTasksWithDueDates = generateDeviceTasksWithDueDates;
 window.generateMonthlyLabVisits = generateMonthlyLabVisits;
+window.resetFilters = resetFilters;
+window.renderLabCards = renderLabCards;
+window.onRegionInput = onRegionInput;
+window.onCityInput = onCityInput;
+window.onLPZInput = onLPZInput;
+window.loadLPZList = loadLPZList;
+window.saveLabCard = saveLabCard;
+window.deleteLab = deleteLab;
+window.editLabCard = editLabCard;
+window.manualVisit = manualVisit;
+window.applyFilters = applyFilters;
+window.showTaskPreviewBeforeSave = showTaskPreviewBeforeSave;

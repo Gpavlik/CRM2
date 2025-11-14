@@ -53,6 +53,17 @@
       border-radius: 6px;
       border: 1px solid #ccc;
     }
+    .modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-content {
+  background: #fff; padding: 16px; border-radius: 8px; width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+.modal-actions { display: flex; gap: 8px; margin-top: 12px; }
+.modal-actions button { flex: 1; }
+
   </style>
 </head>
 <body>
@@ -105,9 +116,20 @@
 
   <!-- Список лабораторій -->
   <div id="labList"></div>
-<script src="./logistics.js"></script>
-  <script src="./labcards.js"></script>
-  <script src="../shared/Calendar.js"></script>
+  <div id="visitModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h4>📅 Запланувати візит</h4>
+    <p id="visitModalInfo"></p>
+    <input type="date" id="visitDate">
+    <div class="modal-actions">
+      <button id="visitConfirmBtn">✅ Запланувати</button>
+      <button id="visitCancelBtn">❌ Скасувати</button>
+    </div>
+  </div>
+</div>
+
+  <script type="module" src="./labcards.js"></script>
+  <script type="module" src="../shared/Calendar.js"></script>
 
   <script>
     window.onload = () => {
