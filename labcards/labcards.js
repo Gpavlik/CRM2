@@ -5,7 +5,14 @@ let kpListByDevice = {};
 let deviceCount = 0;
 let taskSchedule = {}; // глобальний об’єкт для збереження розкладу
 
-const availableCalculators = ["LS-1100", "DF-50", "UN-73", "Citolab-300", "DH-36"];
+const deviceCategories = {
+  "Гематологія": ["DH-36", "DF-50", "UN-73", "VISION Pro", "RN-3600"],
+  "Коагулометрія": ["DP-C16", "СA-1200"],
+  "Сечові аналізатори": ["READER 300"],
+  "Біохімія": ["Biossays 240 Plus", "DP-C16", "Chem-100", "Chem-200"],
+  "Електроліти": ["MINI ISE", "AFT-800"],
+  "ПОКТ": ["LS-1100", "BK-120"]
+};
 
 import { findNearbyAvailableDate, ORS_TOKEN } from "./logistics.js";
 
@@ -119,11 +126,21 @@ function addDevice(index = null, prefill = null) {
   block.className = "device-block";
   block.id = `deviceBlock_${index}`;
   block.innerHTML = `
-    <label for="device_${index}">🔧 Назва приладу:</label>
-    <select id="device_${index}">
-      <option value="">Оберіть прилад</option>
-      ${availableCalculators.map(name => `<option value="${name}">${name}</option>`).join("")}
-    </select>
+    <div class="device-selects">
+      <div>
+        <label for="category_${index}">📂 Категорія:</label>
+        <select id="category_${index}">
+          <option value="">Оберіть категорію</option>
+          ${Object.keys(deviceCategories).map(cat => `<option value="${cat}">${cat}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label for="device_${index}">🔧 Прилад:</label>
+        <select id="device_${index}">
+          <option value="">Спочатку оберіть категорію</option>
+        </select>
+      </div>
+    </div>
 
     <label for="soldDate_${index}">📅 Дата продажу:</label>
     <input type="date" id="soldDate_${index}">
@@ -157,9 +174,19 @@ function addDevice(index = null, prefill = null) {
   `;
   container.appendChild(block);
 
-  // Автозавантаження КП
+  // 🔧 При зміні категорії оновлюємо список приладів
+  document.getElementById(`category_${index}`).addEventListener("change", (e) => {
+    const category = e.target.value;
+    const deviceSelect = document.getElementById(`device_${index}`);
+    deviceSelect.innerHTML = `<option value="">Оберіть прилад</option>`;
+    if (deviceCategories[category]) {
+      deviceSelect.innerHTML += deviceCategories[category].map(d => `<option value="${d}">${d}</option>`).join("");
+    }
+  });
+
+  // 🔧 При виборі приладу завантажуємо калькулятор
   document.getElementById(`device_${index}`).addEventListener("change", () => {
-    loadCalculator(index, prefill); // передаємо prefill у loadCalculator
+    loadCalculator(index, prefill);
     const deviceName = document.getElementById(`device_${index}`).value;
     const kpOptions = kpListByDevice[deviceName] || [];
     const kpSelect = document.getElementById(`kpSelect_${index}`);
@@ -167,36 +194,45 @@ function addDevice(index = null, prefill = null) {
       kpOptions.map(kp => `<option value="${kp}">${kp}</option>`).join("");
   });
 
-  // Показати поле замінених деталей
+  // 🔧 Показати поле замінених деталей
   document.getElementById(`workType_${index}`).addEventListener("change", (e) => {
     const show = e.target.value === "заміна деталей";
     document.getElementById(`replacedPartsBlock_${index}`).style.display = show ? "block" : "none";
   });
 
-  // Видалення блоку
+  // 🔧 Видалення блоку
   document.getElementById(`removeDevice_${index}`).addEventListener("click", () => {
     block.remove();
   });
 
-  // Якщо є дані для заповнення (редагування)
-  if (prefill) {
-    // базові поля
-    document.getElementById(`device_${index}`).value = prefill.device || "";
-    document.getElementById(`soldDate_${index}`).value = prefill.soldDate || "";
-    document.getElementById(`lastService_${index}`).value = prefill.lastService || "";
-    document.getElementById(`workType_${index}`).value = prefill.workType || "";
-    document.getElementById(`replacedParts_${index}`).value = prefill.replacedParts || "";
-    document.getElementById(`kpSelect_${index}`).value = prefill.kp || "";
-    document.getElementById(`testCount_${index}`).value = prefill.testCount || 0;
+  // 🔧 Якщо є дані для заповнення (редагування)
+if (prefill) {
+  document.getElementById(`soldDate_${index}`).value = prefill.soldDate || "";
+  document.getElementById(`lastService_${index}`).value = prefill.lastService || "";
+  document.getElementById(`workType_${index}`).value = prefill.workType || "";
+  document.getElementById(`replacedParts_${index}`).value = prefill.replacedParts || "";
+  document.getElementById(`kpSelect_${index}`).value = prefill.kp || "";
 
-    if (prefill.workType === "заміна деталей") {
-      document.getElementById(`replacedPartsBlock_${index}`).style.display = "block";
-    }
+  if (prefill.workType === "заміна деталей") {
+    document.getElementById(`replacedPartsBlock_${index}`).style.display = "block";
+  }
 
-    // викликаємо loadCalculator з prefill, щоб він заповнив аналізи/реагенти після рендера
+  // знайти категорію для приладу
+  const category = Object.keys(deviceCategories).find(cat => deviceCategories[cat].includes(prefill.device));
+  if (category) {
+    document.getElementById(`category_${index}`).value = category;
+    const deviceSelect = document.getElementById(`device_${index}`);
+    deviceSelect.innerHTML = `<option value="">Оберіть прилад</option>` +
+      deviceCategories[category].map(d => `<option value="${d}">${d}</option>`).join("");
+    deviceSelect.value = prefill.device;
+
+    // 🔧 loadCalculator сам створить потрібні поля (testCount або аналізи LS-1100)
     loadCalculator(index, prefill);
   }
 }
+
+}
+
 function loadCalculator(index, prefill = null) {
   const deviceName = document.getElementById(`device_${index}`)?.value?.trim();
   if (!deviceName) return;
@@ -204,28 +240,11 @@ function loadCalculator(index, prefill = null) {
   const key = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 
   const applyPrefill = (config) => {
-    renderTestCountField(index, config);
+    renderTestCountField(index, config, deviceName);
     renderReagentFields(index, config);
-    if (deviceName === "LS-1100") {
-      renderAnalysisFields(index, config);
-    }
 
-    // після рендера заповнюємо prefill
-    if (prefill) {
-      if (prefill.analyses) {
-        Object.keys(prefill.analyses).forEach(name => {
-          const input = document.getElementById(`analysis_${index}_${name}`);
-          if (input) input.value = prefill.analyses[name];
-        });
-      }
-      if (prefill.reagentsInfo) {
-        Object.keys(prefill.reagentsInfo).forEach(rName => {
-          const countEl = document.getElementById(`reagentCount_${index}_${rName}`);
-          const dateEl = document.getElementById(`reagentDate_${index}_${rName}`);
-          if (countEl) countEl.value = prefill.reagentsInfo[rName].lastOrderCount || "";
-          if (dateEl) dateEl.value = prefill.reagentsInfo[rName].lastOrderDate || "";
-        });
-      }
+    if (deviceName === "LS-1100") {
+      renderAnalysisFieldsLS1100(index, config, prefill);
     }
   };
 
@@ -246,18 +265,25 @@ function loadCalculator(index, prefill = null) {
 }
 
 
-function renderTestCountField(index, config) {
+function renderTestCountField(index, config, deviceName) {
   const container = document.getElementById(`deviceBlock_${index}`);
   if (!container) return;
 
+  // 🔧 Якщо це LS-1100 — не малюємо глобальний testCount
+  if (deviceName === "LS-1100") {
+    return; // бо для LS-1100 є окремі інпути по кожному тесту
+  }
+
+  // 🔧 Для інших приладів — стандартний один інпут
   const html = `
     <label>🔬 Кількість досліджень на день:
-      <input type="number" id="testCount_${index}" min="0" value="${config.testsPerDay || ''}" />
+      <input type="number" id="testCount_${index}" min="0" value="${config.testsPerDay || 0}" />
     </label>
   `;
-
   container.insertAdjacentHTML("beforeend", html);
 }
+
+
 
 function renderReagentFields(index, config) {
   const container = document.getElementById(`deviceBlock_${index}`);
@@ -278,19 +304,52 @@ function renderReagentFields(index, config) {
 
   container.insertAdjacentHTML("beforeend", html);
 }
-function renderAnalysisFields(index, config) {
+function renderAnalysisFieldsLS1100(index, config, prefill = null) {
   const container = document.getElementById(`analysisFields_${index}`);
-  container.innerHTML = "<h4>📋 Аналізи (LS-1100)</h4>";
+  container.innerHTML = "<h4>🧪 Тести LS-1100</h4>";
 
-  Object.entries(config.analyses).forEach(([name]) => {
-    const row = document.createElement("div");
-    row.innerHTML = `
-      <label>${name}:</label>
-      <input type="number" min="0" id="analysis_${index}_${name}" data-analysis="${name}" placeholder="Кількість тестів">
+  Object.keys(config.analyses).forEach(testName => {
+    const safeId = testName.replace(/[^a-zA-Z0-9]/g, "_");
+
+    const block = document.createElement("div");
+    block.className = "analysis-block";
+    block.style.border = "1px solid #ccc";
+    block.style.borderRadius = "6px";
+    block.style.padding = "10px";
+    block.style.marginBottom = "12px";
+    block.style.background = "#f9f9f9";
+
+    block.innerHTML = `
+      <div class="analysis-title"><strong>${testName}</strong></div>
+      <div class="analysis-inputs">
+        <label>
+          📊/день
+          <input type="number" id="analysisCount_${index}_${safeId}" min="0" value="0">
+        </label>
+        <label>
+          📦 упаковок
+          <input type="number" id="analysisPackages_${index}_${safeId}" min="0" value="0">
+        </label>
+        <label>
+          📅 закупівля
+          <input type="date" id="analysisDate_${index}_${safeId}">
+        </label>
+      </div>
     `;
-    container.appendChild(row);
+    container.appendChild(block);
+
+    // 🔧 Якщо є prefill — заповнити
+    if (prefill && prefill.analyses && prefill.analyses[testName]) {
+      const data = prefill.analyses[testName];
+      document.getElementById(`analysisCount_${index}_${safeId}`).value = data.count || 0;
+      document.getElementById(`analysisPackages_${index}_${safeId}`).value = data.packages || 0;
+      if (data.date && data.date !== "НІКОЛИ") {
+        document.getElementById(`analysisDate_${index}_${safeId}`).value = data.date;
+      }
+    }
   });
 }
+
 function toISODateLocal(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -532,7 +591,7 @@ async function saveLabCard() {
     devices: [],
     tasks: [],
     lastUpdated: today.toISOString(),
-    saveDate: today.toISOString() // 🔧 важливо для генерації задач
+    saveDate: today.toISOString()
   };
 
   // 🔧 Перевірка обов'язкових полів
@@ -565,37 +624,72 @@ async function saveLabCard() {
     };
 
     // 🔧 Аналізи для LS-1100
-    if (deviceName === "LS-1100" && config?.analyses) {
-      Object.keys(config.analyses).forEach(name => {
-        const input = document.getElementById(`analysis_${i}_${name}`);
-        if (input && input.value) {
-          device.analyses[name] = parseInt(input.value);
-        }
+if (deviceName === "LS-1100" && config?.analyses) {
+  Object.keys(config.analyses).forEach(testName => {
+    const safeId = testName.replace(/[^a-zA-Z0-9]/g, "_");
+    const countEl = document.getElementById(`analysisCount_${i}_${safeId}`);
+    const packagesEl = document.getElementById(`analysisPackages_${i}_${safeId}`);
+    const dateEl = document.getElementById(`analysisDate_${i}_${safeId}`);
+
+    const count = countEl ? parseInt(countEl.value || "0", 10) : 0;
+    const packages = packagesEl ? parseInt(packagesEl.value || "0", 10) : 0;
+    const date = dateEl && dateEl.value ? dateEl.value : "НІКОЛИ";
+
+    device.analyses[testName] = { count, packages, date };
+
+    // 🔧 задачі лише якщо є дані (наприклад, пакети > 0)
+    if (packages > 0) {
+      // розрахунок на скільки днів вистачить:
+      // припустимо, що в одній упаковці N тестів (це можна додати в config)
+      const testsPerPackage = config.testsPerPackage || 25; // приклад
+      const totalTests = packages * testsPerPackage;
+      const daysAvailable = count > 0 ? Math.floor(totalTests / count) : "∞";
+
+      labCard.tasks.push({
+        lab: labCard.partner,
+        city: labCard.city,
+        device: deviceName,
+        title: `Закупівля реагентів для ${testName} (вистачить на ${daysAvailable} днів)`,
+        date,
+        priority: "⚠️"
       });
     }
-
+  });
+}
     // 🔧 Реагенти
     if (config?.reagents) {
       config.reagents.forEach(r => {
         const count = document.getElementById(`reagentCount_${i}_${r.name}`)?.value;
         const date = document.getElementById(`reagentDate_${i}_${r.name}`)?.value;
-        device.reagentsInfo[r.name] = {
-          lastOrderCount: count ? parseInt(count) : null,
-          lastOrderDate: date || null
-        };
+
+        const lastOrderCount = count ? parseInt(count) : 0;
+        const lastOrderDate = date || "НІКОЛИ";
+
+        device.reagentsInfo[r.name] = { lastOrderCount, lastOrderDate };
+
+        // 🔧 задачі лише якщо count > 0
+        if (lastOrderCount > 0) {
+          labCard.tasks.push({
+            lab: labCard.partner,
+            city: labCard.city,
+            device: deviceName,
+            title: `Закупівля реагенту ${r.name}`,
+            date: lastOrderDate,
+            priority: "⚠️"
+          });
+        }
       });
     }
 
     labCard.devices.push(device);
   }
 
-  // 🔧 Генерація задач
+  // 🔧 Генерація задач (додаткові, наприклад візити)
   const deviceTasks = await generateDeviceTasksWithDueDates(labCard);
-  const allTasks = await generateMonthlyLabVisits(deviceTasks);
+  const allTasks = await generateMonthlyLabVisits([...labCard.tasks, ...deviceTasks]);
 
   // 🔧 Фільтрація задач для цієї лабораторії
   labCard.tasks = allTasks.filter(t => t.lab === labCard.partner && t.city === labCard.city);
-
 
   // 🔧 Прев’ю задач
   showTaskPreviewBeforeSave(labCard, labCard.tasks, () => {
@@ -629,6 +723,7 @@ async function saveLabCard() {
     }
   });
 }
+
 // ✅ Видалення з localStorage — без глобальної змінної
 function deleteLab(index) {
   if (!confirm("❌ Ви впевнені, що хочете видалити цю лабораторію?")) return;
