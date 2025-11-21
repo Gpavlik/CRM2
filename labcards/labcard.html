@@ -76,7 +76,11 @@
   width: 100%;
   box-sizing: border-box;
 }
-
+.analysis-calc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #333;
+}
   </style>
 </head>
 <body>
@@ -111,77 +115,62 @@
 
   <label for="labManager">👤 Відповідальний менеджер:</label>
   <input type="text" id="labManager" placeholder="ПІБ менеджера">
-
+ <!-- спочатку прихована -->
+<div id="devicesSection" style="display:none;">
   <h3>🔧 Прилади</h3>
-  <div id="devicesContainer"></div>
-  <button id="addDeviceBtn">➕ Додати прилад</button>
-  <button id="saveLabBtn">💾 Зберегти</button>
-
-
+  <div id="devicesContainer"></div> 
+</div>
+<button id="addDeviceBtn">➕ Додати прилад</button>
+ <button id="saveLabBtn">💾 Зберегти</button>
 <script type="module" src="labcards.js"></script>
   <script type="module">
-  window.addEventListener("DOMContentLoaded", () => {
-    // 🔧 Завантаження списку ЛПЗ
-    if (typeof loadLPZList === "function") loadLPZList();
+ window.addEventListener("DOMContentLoaded", () => {
+  // 🔧 Завантаження списку ЛПЗ
+  if (typeof loadLPZList === "function") loadLPZList();
 
-    // 🔧 Кнопка додати прилад
-    const addBtn = document.getElementById("addDeviceBtn");
-    if (addBtn) {
-      addBtn.addEventListener("click", () => {
-        if (typeof addDevice === "function") addDevice();
-      });
-    }
-
-    // 🔧 Кнопка зберегти лабораторію
-    const saveBtn = document.getElementById("saveLabBtn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", () => {
-        if (typeof saveLabCard === "function") saveLabCard();
-      });
-    }
-
-    // 🔧 Автопідказки для регіону/міста/ЛПЗ
-    document.getElementById("region")?.addEventListener("input", e => {
-      if (typeof onRegionInput === "function") onRegionInput(e);
+  // 🔧 Кнопка додати прилад
+  const addBtn = document.getElementById("addDeviceBtn");
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      const devicesSection = document.getElementById("devicesSection");
+      devicesSection.style.display = "block"; // показати блок приладів
+      if (typeof addDevice === "function") addDevice();
     });
-    document.getElementById("city")?.addEventListener("input", e => {
-      if (typeof onCityInput === "function") onCityInput(e);
+  }
+
+  // 🔧 Кнопка зберегти лабораторію
+  const saveBtn = document.getElementById("saveLabBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      if (typeof saveLabCard === "function") saveLabCard();
     });
-    document.getElementById("lpz")?.addEventListener("input", e => {
-      if (typeof onLPZInput === "function") onLPZInput(e);
-    });
+  }
 
-    // 🔧 Завантаження KP‑списку
-    fetch("../calculators/kp-list.json")
-      .then(res => res.json())
-      .then(data => {
-        data.forEach(entry => {
-          kpListByDevice[entry.device] = entry.KP;
-        });
-      })
-      .catch(err => console.warn("⚠️ Не вдалося завантажити kp-list.json", err));
-
-    // 🔧 Якщо редагуємо існуючу лабораторію — заповнити форму
-    const editData = JSON.parse(localStorage.getItem("editLabCard") || "null");
-    if (editData && editData.lab) {
-      const lab = editData.lab;
-      document.getElementById("partnerName").value = lab.partner || "";
-      document.getElementById("region").value = lab.region || "";
-      document.getElementById("city").value = lab.city || "";
-      document.getElementById("lpz").value = lab.institution || "";
-      document.getElementById("labAddress").value = lab.address || "";
-      document.getElementById("contractor").value = lab.contractor || "";
-      document.getElementById("phone").value = lab.phone || "";
-      document.getElementById("labEdrpou").value = lab.edrpou || "";
-      document.getElementById("labManager").value = lab.manager || "";
-
-      // 🔧 Відновлення пристроїв
-      lab.devices.forEach((device, i) => {
-        if (typeof addDevice === "function") addDevice(i, device); 
-        // тепер addDevice створює блок з правильним індексом і одразу заповнює дані
-      });
-    }
+  // 🔧 Автопідказки для регіону/міста/ЛПЗ
+  document.getElementById("region")?.addEventListener("input", e => {
+    if (typeof onRegionInput === "function") onRegionInput(e);
   });
+  document.getElementById("city")?.addEventListener("input", e => {
+    if (typeof onCityInput === "function") onCityInput(e);
+  });
+  document.getElementById("lpz")?.addEventListener("input", e => {
+    if (typeof onLPZInput === "function") onLPZInput(e);
+  });
+
+  // 🔧 Завантаження KP‑списку
+  fetch("../calculators/kp-list.json")
+    .then(res => res.json())
+    .then(data => {
+      data.forEach(entry => {
+        kpListByDevice[entry.device] = entry.KP;
+      });
+    })
+    .catch(err => console.warn("⚠️ Не вдалося завантажити kp-list.json", err));
+
+  // 🔧 Ініціалізація картки (нова або редагування)
+  if (typeof initLabCard === "function") initLabCard();
+});
+
 </script>
 </body>
 </html>

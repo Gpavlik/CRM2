@@ -1,15 +1,30 @@
-// logistics.js
+// logistics.js — узгоджена версія
 
-export const ORS_TOKEN = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjA3YmNiYmQxNWVmNTQxZTFhMzU3ZjkyMjZmZTVhNDc1IiwiaCI6Im11cm11cjY0In0=";
+export const ORS_TOKEN =
+  "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjA3YmNiYmQxNWVmNTQxZTFhMzU3ZjkyMjZmZTVhNDc1IiwiaCI6Im11cm11cjY0In0=";
+
 export const orsDistanceCache = {};
 
+// ===== Утиліта для форматування дат =====
+function formatDateYYYYMMDD(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
+// ===== Отримання відстані між містами через OpenRouteService =====
 export async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
-  const key = `${cityA}__${cityB}`;
+  // нормалізуємо ключ кешу, щоб уникнути дублювання Київ__Львів vs Львів__Київ
+  const key = [cityA, cityB].sort().join("__");
   if (orsDistanceCache[key]) return orsDistanceCache[key];
 
   const geocode = async city => {
-    const res = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${token}&text=${encodeURIComponent(city)}`);
+    const res = await fetch(
+      `https://api.openrouteservice.org/geocode/search?api_key=${token}&text=${encodeURIComponent(
+        city
+      )}`
+    );
     const data = await res.json();
     return data.features[0]?.geometry?.coordinates;
   };
@@ -20,7 +35,7 @@ export async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
   const res = await fetch(`https://api.openrouteservice.org/v2/matrix/driving-car`, {
     method: "POST",
     headers: {
-      "Authorization": token,
+      Authorization: token,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -37,7 +52,13 @@ export async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
   return km;
 }
 
-export async function findNearbyAvailableDate(taskCity, taskSchedule, token = ORS_TOKEN, preferredDate = null) {
+// ===== Пошук найближчої доступної дати для задачі =====
+export async function findNearbyAvailableDate(
+  taskCity,
+  taskSchedule,
+  token = ORS_TOKEN,
+  preferredDate = null
+) {
   const maxTasksPerDay = 6;
   const candidate = preferredDate ? new Date(preferredDate) : new Date();
   let fallbackDate = null;
@@ -49,7 +70,7 @@ export async function findNearbyAvailableDate(taskCity, taskSchedule, token = OR
       continue;
     }
 
-    const key = candidate.toISOString().split("T")[0];
+    const key = formatDateYYYYMMDD(candidate);
     const tasks = taskSchedule[key] || [];
 
     const hasSpace = tasks.length < maxTasksPerDay;
@@ -63,17 +84,15 @@ export async function findNearbyAvailableDate(taskCity, taskSchedule, token = OR
       }
     }
 
-    if (hasSpace && nearby) return new Date(candidate);   // ✅ повертаємо Date
-    if (!fallbackDate && hasSpace) fallbackDate = new Date(candidate); // ✅ зберігаємо Date
+    if (hasSpace && nearby) return formatDateYYYYMMDD(candidate);
+    if (!fallbackDate && hasSpace) fallbackDate = formatDateYYYYMMDD(candidate);
 
     candidate.setDate(candidate.getDate() + 1);
   }
 
-  return fallbackDate || candidate; // ✅ завжди Date
+  return fallbackDate || formatDateYYYYMMDD(candidate);
 }
 
-
-
-
+// ===== Експортуємо у глобальний простір, якщо потрібно =====
 window.findNearbyAvailableDate = findNearbyAvailableDate;
-window.ORS_TOKEN = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjA3YmNiYmQxNWVmNTQxZTFhMzU3ZjkyMjZmZTVhNDc1IiwiaCI6Im11cm11cjY0In0=";
+window.ORS_TOKEN = ORS_TOKEN;

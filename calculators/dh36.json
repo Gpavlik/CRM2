@@ -1,6 +1,6 @@
 {
   "deviceName": "DH-36",
-  "testsPerDay": 20,
+  "testsPerDay": 50,
   "testPrice": 120,
   "reagents": [
     {
