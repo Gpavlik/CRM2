@@ -1,9 +1,8 @@
-// Calendar.js — узгоджена версія, яка працює тільки з localStorage.visits
+// Calendar.js — узгоджена версія, яка працює тільки з localStorage.visits у форматі devices
 // Дата зберігається виключно у форматі "YYYY-MM-DD" без toISOString(), щоб уникнути зсувів
 
 // ===== Утиліти дат =====
 function formatDateYYYYMMDD(dateObj) {
-  // Повертає локальну дату у форматі YYYY-MM-DD без часових зсувів
   const year = dateObj.getFullYear();
   const month = String(dateObj.getMonth() + 1).padStart(2, "0");
   const day = String(dateObj.getDate()).padStart(2, "0");
@@ -16,112 +15,72 @@ export function getNextDeliveryDate() {
   return formatDateYYYYMMDD(nextMonth);
 }
 
-export function getDeliveryDate() {
-  const today = new Date();
-  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  return formatDateYYYYMMDD(nextMonth);
-}
-
 // ===== Робота зі сховищем =====
 function loadVisits() {
-  return JSON.parse(localStorage.getItem("visits") || "[]");
+  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  // міграція tasks → devices
+  visits = visits.map(v => normalizeVisit(v));
+  localStorage.setItem("visits", JSON.stringify(visits));
+  return visits;
 }
-
 function saveVisits(visits) {
   localStorage.setItem("visits", JSON.stringify(visits));
 }
-
 function loadLabCards() {
   return JSON.parse(localStorage.getItem("labCards") || "[]");
 }
 
-// М'яка міграція: якщо є legacy calendarTasks — переносимо у visits і видаляємо
-function migrateCalendarTasksToVisits() {
-  const legacy = JSON.parse(localStorage.getItem("calendarTasks") || "[]");
-  if (!legacy.length) return;
-
-  const visits = loadVisits();
-  const migrated = legacy.map(t => ({
-    id: `legacy_${t.id || Date.now()}`,
-    labId: t.labId || null,
-    labName: t.lab || "",
-    date: t.date, // очікується YYYY-MM-DD
-    tasks: [
-      {
-        device: t.device || "",
-        title: t.title || "",
-        description: t.description || "",
-        priority: t.priority || "середній",
-        action: t.type || "ручне додавання"
-      }
-    ],
-    status: t.status || "заплановано"
-  }));
-
-  saveVisits([...visits, ...migrated]);
-  localStorage.removeItem("calendarTasks");
+// ===== Міграція tasks → devices =====
+function normalizeVisit(visit) {
+  if (visit.devices) return visit;
+  const devicesMap = {};
+  (visit.tasks || []).forEach(t => {
+    if (!devicesMap[t.device]) {
+      devicesMap[t.device] = {
+        deviceName: t.device,
+        forecast: { quantity: 0 },
+        agreement: { quantity: 0 },
+        fact: { quantity: 0, date: "" },
+        testsPerDay: 0,
+        reagents: []
+      };
+    }
+    devicesMap[t.device].reagents.push(t.action || t.title || "");
+  });
+  visit.devices = Object.values(devicesMap);
+  delete visit.tasks;
+  return visit;
 }
 
-// ===== Генерація подій (інформаційні, якщо потрібно) =====
-export function generateEvents({
-  device,
-  partner,
-  soldDate,
-  testsPerDay,
-  reagents,
-  serviceIntervalDays = 90,
-  replacementAfterDays = 365
-}) {
-  const events = [];
-  const startDate = new Date(soldDate);
+// мігруємо всі visits
+let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+visits = visits.map(v => normalizeVisit(v));
+localStorage.setItem("visits", JSON.stringify(visits));
+console.log(visits);
 
-  // Події закупівлі реагентів (інформаційні)
-  reagents.forEach(r => {
-    const dailyUsage = r.usagePerTest * testsPerDay;
-    const daysToDepletion = Math.floor(r.volume / dailyUsage);
-    const depletionDate = new Date(startDate);
-    depletionDate.setDate(depletionDate.getDate() + daysToDepletion - 5);
 
-    events.push({
-      date: formatDateYYYYMMDD(depletionDate),
-      type: "реагенти",
-      title: `🔬 Закупівля ${r.name}`,
-      partner,
-      device,
-      description: `Очікуване вичерпання реагенту ${r.name}. Рекомендується зв’язатися з партнером.`
-    });
-  });
-
-  // Сервіс кожні serviceIntervalDays
-  for (let i = serviceIntervalDays; i < replacementAfterDays; i += serviceIntervalDays) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    events.push({
-      date: formatDateYYYYMMDD(date),
-      type: "сервіс",
-      title: `🛠️ Сервісне обслуговування ${device}`,
-      partner,
-      device,
-      description: `Плановий сервіс приладу ${device}`
-    });
+// ===== Генерація візитів на основі labCards =====
+// Допоміжна функція для парсингу кількості з тексту задачі
+function parseReagentTask(taskText) {
+  // шукаємо патерн "Назва (N уп.)"
+  const match = taskText.match(/(.+?)\s*\((\d+)\s*уп\.\)/);
+  if (match) {
+    return {
+      name: match[1].trim(),
+      forecast: { quantity: parseInt(match[2]) },
+      agreement: { quantity: 0 },
+      fact: { quantity: 0, date: "" }
+    };
   }
-
-  // Заміна приладу
-  const replacementDate = new Date(startDate);
-  replacementDate.setDate(replacementDate.getDate() + replacementAfterDays);
-  events.push({
-    date: formatDateYYYYMMDD(replacementDate),
-    type: "заміна",
-    title: `🔁 Пропозиція заміни ${device}`,
-    partner,
-    device,
-    description: `Оцінити потребу в оновленні приладу ${device}`
-  });
-
-  return events;
+  // якщо кількість не знайдена — створюємо базовий об’єкт
+  return {
+    name: taskText,
+    forecast: { quantity: 0 },
+    agreement: { quantity: 0 },
+    fact: { quantity: 0, date: "" }
+  };
 }
 
-// ===== Генерація візитів на основі labCards (механізм 1: авто) =====
 export function generateVisitsFromLabCards() {
   const labCards = loadLabCards();
   const visits = loadVisits();
@@ -131,59 +90,55 @@ export function generateVisitsFromLabCards() {
 
   labCards.forEach(lab => {
     (lab.devices || []).forEach(device => {
-      // Якщо немає reagents — пропускаємо інформаційний блок
       const reagents = device.reagents || [];
-      reagents.forEach(r => {
-        const reagentList = r.usage
-          ? Object.entries(r.usage)
-              .map(([name, amount]) => `${name}: ${amount.toFixed(2)} мл`)
-              .join(", ")
-          : "";
 
+      // закупівля реагентів
+      reagents.forEach(r => {
+        const reagentTask = `Замов реагент — ${r.name} (${r.count} уп.)`;
         newVisits.push({
-          id: `${lab.id || lab.edrpou || lab.partner}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          labId: lab.id || lab.edrpou || null,
+          id: `${lab.id || lab.partner}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          labId: lab.id || null,
           labName: lab.partner,
           date: nextDelivery,
-          tasks: [
-            {
-              device: device.device || "",
-              title: `🔬 ${r.name} — ${r.count} тестів`,
-              description: reagentList ? `📦 Витрата: ${reagentList}` : "",
-              priority: "середній",
-              action: "Закупівля реагентів"
-            }
-          ],
+          devices: [{
+            deviceName: device.device || "",
+            forecast: { quantity: 0 },
+            agreement: { quantity: 0 },
+            fact: { quantity: 0, date: "" },
+            testsPerDay: 0,
+            reagents: [parseReagentTask(reagentTask)]
+          }],
+          notes: "",
           status: "заплановано"
         });
       });
 
-      // Додатково: базовий план сервісу через serviceIntervalDays, якщо задано
+      // сервіс
       const serviceIntervalDays = device.serviceIntervalDays || 90;
       const startDate = device.soldDate ? new Date(device.soldDate) : new Date();
       const firstServiceDate = new Date(startDate);
       firstServiceDate.setDate(firstServiceDate.getDate() + serviceIntervalDays);
 
       newVisits.push({
-        id: `${lab.id || lab.edrpou || lab.partner}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        labId: lab.id || lab.edrpou || null,
+        id: `${lab.id || lab.partner}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        labId: lab.id || null,
         labName: lab.partner,
         date: formatDateYYYYMMDD(firstServiceDate),
-        tasks: [
-          {
-            device: device.device || "",
-            title: `🛠️ Плановий сервіс`,
-            description: `Плановий сервіс приладу`,
-            priority: "середній",
-            action: "Сервіс"
-          }
-        ],
+        devices: [{
+          deviceName: device.device || "",
+          forecast: { quantity: 0 },
+          agreement: { quantity: 0 },
+          fact: { quantity: 0, date: "" },
+          testsPerDay: 0,
+          reagents: [ { name: "Сервіс", forecast: { quantity: 0 }, agreement: { quantity: 0 }, fact: { quantity: 0, date: "" } } ]
+        }],
+        notes: "",
         status: "заплановано"
       });
     });
   });
 
-  // Апсерт без дублювання: ключ дублювання (labId + date)
+  // Апсерт без дублювання
   const existingKeys = new Set(visits.map(v => `${v.labId || v.labName}_${v.date}`));
   const merged = [
     ...visits,
@@ -194,7 +149,9 @@ export function generateVisitsFromLabCards() {
   return newVisits;
 }
 
-// ===== Оновлення статусу візиту =====
+
+
+// ===== Оновлення статусу =====
 export function updateVisitStatus(visitId, status) {
   const visits = loadVisits();
   const idx = visits.findIndex(v => v.id === visitId);
@@ -204,12 +161,8 @@ export function updateVisitStatus(visitId, status) {
   }
 }
 
-// ===== Обробка звітів і генерація річного плану (механізм 1: авто) =====
-// Очікується, що window.generateAllLabVisits(labs) повертає масив візитів у формі:
-// [{ labId, lab, date (YYYY-MM-DD), tasks: [{device, title, description, priority, action}], status? }]
+// ===== Обробка звітів =====
 export async function processVisitReport(visitReports) {
-  migrateCalendarTasksToVisits(); // одноразова міграція старих записів
-
   const allLabs = loadLabCards();
 
   const updatedLabs = typeof window.applyFieldUpdatesFromVisits === "function"
@@ -222,7 +175,6 @@ export async function processVisitReport(visitReports) {
   if (typeof window.generateAllLabVisits === "function") {
     generated = await window.generateAllLabVisits(updatedLabs);
   } else {
-    // Якщо немає глобальної функції — робимо базову генерацію на місяць вперед з reagents
     generated = generateVisitsFromLabCards();
   }
 
@@ -238,8 +190,16 @@ export async function processVisitReport(visitReports) {
       id: `${visit.labId || visit.lab}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       labId: visit.labId || null,
       labName: visit.labName || visit.lab,
-      date: visit.date, // очікується YYYY-MM-DD
-      tasks: Array.isArray(visit.tasks) ? visit.tasks : [],
+      date: visit.date,
+      devices: [{
+        deviceName: visit.tasks?.[0]?.device || "",
+        forecast: { quantity: 0 },
+        agreement: { quantity: 0 },
+        fact: { quantity: 0, date: "" },
+        testsPerDay: 0,
+        reagents: (visit.tasks || []).map(t => t.action || t.title || "")
+      }],
+      notes: "",
       status: visit.status || "заплановано"
     };
     if (!existingKeys.has(key)) {
@@ -254,13 +214,12 @@ export async function processVisitReport(visitReports) {
   }
 }
 
-// ===== Допоміжні механізми (механізм 2 і 3: ручні) =====
-export function createManualVisit({ labId, labName, date, tasks = [] }) {
-  // використовується з index.html або при кліку у календарі
-  const visits = loadVisits();
-  const normalizedDate = date; // формат YYYY-MM-DD очікується напряму
 
-  // видаляємо дубль того ж labId + date
+// ===== Створення вручну =====
+export function createManualVisit({ labId, labName, date, devices = [] }) {
+  const visits = loadVisits();
+  const normalizedDate = date;
+
   const filtered = visits.filter(v => !( (v.labId || v.labName) === (labId || labName) && v.date === normalizedDate ));
 
   const newVisit = {
@@ -268,7 +227,8 @@ export function createManualVisit({ labId, labName, date, tasks = [] }) {
     labId: labId || null,
     labName,
     date: normalizedDate,
-    tasks,
+    devices,
+    notes: "",
     status: "заплановано"
   };
 
@@ -276,7 +236,8 @@ export function createManualVisit({ labId, labName, date, tasks = [] }) {
   return newVisit;
 }
 
-// ===== Фінансові розрахунки (залишено з твого файлу) =====
+
+// ===== Фінансові розрахунки =====
 export default {
   calculateFinancials({
     devicePrice,

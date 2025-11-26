@@ -2,13 +2,47 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>🧪 звіти</title>
+  <title>🧪 Звіти</title>
 </head>
 <body>
   <h2>📊 Звіт по реагентам</h2>
-<button onclick="showReagentReport()">🔍 Згенерувати звіт</button>
-<a href="../index.html"><button>📅 Назад</button></a>
-<div id="reagentReport"></div>
-<script src="./reports.js"></script>
+
+  <!-- Форма вибору періоду, реагенту, режиму та типу звіту -->
+  <form onsubmit="event.preventDefault(); generateReport();">
+    <label>Початок:
+      <input type="date" id="startDate" required>
+    </label>
+    <label>Кінець:
+      <input type="date" id="endDate" required>
+    </label>
+    <label>Реагент:
+      <select id="reagentSelect">
+        <option value="">Усі</option>
+      </select>
+    </label>
+    <label>Режим:
+      <select id="reportMode">
+        <option value="simple">Звичайний</option>
+        <option value="detailed">Детальний</option>
+      </select>
+    </label>
+    <label>Тип звіту:
+      <select id="reportType">
+        <option value="forecast">Прогноз</option>
+        <option value="needs">Потреба</option>
+        <option value="facts">Факт</option>
+      </select>
+    </label>
+    <button type="submit">🔍 Згенерувати звіт</button>
+  </form>
+
+  <div id="reagentReport"></div>
+
+  <a href="../index.html"><button>📅 Назад</button></a>
+  <button onclick="exportTableToExcel('reagentTable','reagents_report.xlsx')">📊 Експорт у Excel</button>
+
+  <script src="./report.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 </body>
 </html>
