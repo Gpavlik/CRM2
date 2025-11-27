@@ -18,13 +18,31 @@
     .modal h3 { margin-top: 0; }
     .modal-content div { margin-bottom: 10px; }
     .modal button { margin-top: 10px; padding: 8px; }
+
+  .visit-menu button:hover {
+    background:#f0f0f0;
+  }
+  .visit-menu button {
+    display:block;
+    width:100%;
+    margin:4px 0;
+    padding:6px;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .visit-menu 
   </style>
 </head>
 <body>
   <h2>📅 Календар візитів</h2>
   <a href="../labcards/index.html"><button>🏥 Перейти до лабораторій</button></a>
   <div id="fullCalendar"></div>
-
+<div id="visitMenu" class="visit-menu" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; padding:10px; border-radius:6px;">
+  <button onclick="onStartVisit()">Розпочати</button>
+  <button onclick="onCancelVisit()">Відмінити</button>
+  <button onclick="onRescheduleVisit()">Перенести</button>
+</div>
   <!-- Модальне вікно для роботи на візиті -->
   <div id="visitModal" class="modal" style="display:none;">
     <div class="modal-content">
@@ -110,7 +128,9 @@ function renderFullCalendar() {
       openVisitModal(v);
     }
   });
-
+element.addEventListener("click", e => {
+  showVisitMenu(visit.id, e.pageX, e.pageY);
+});
   calendar.render();
 }
 
@@ -371,6 +391,42 @@ function closeModal() {
 }
 
 window.addEventListener("DOMContentLoaded", renderFullCalendar);
+let currentVisitId = null;
+
+// Виклик при кліку на візит у календарі
+function showVisitMenu(visitId, x, y) {
+  currentVisitId = visitId;
+  const menu = document.getElementById("visitMenu");
+  menu.style.left = x + "px";
+  menu.style.top = y + "px";
+  menu.style.display = "block";
+}
+
+// Закриття меню
+function hideVisitMenu() {
+  document.getElementById("visitMenu").style.display = "none";
+}
+
+// Обробники кнопок
+function onStartVisit() {
+  hideVisitMenu();
+  // відкриваємо модалку для внесення факту
+  openFactModal(currentVisitId);
+}
+
+function onCancelVisit() {
+  hideVisitMenu();
+  cancelVisit(currentVisitId); // змінює статус на "відмінено"
+}
+
+function onRescheduleVisit() {
+  hideVisitMenu();
+  const newDate = prompt("Виберіть нову дату у форматі YYYY-MM-DD:");
+  if (newDate) {
+    rescheduleVisit(currentVisitId, newDate); // переносить візит
+  }
+}
+
 </script>
 </body>
 </html>

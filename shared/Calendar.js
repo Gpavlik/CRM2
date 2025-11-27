@@ -377,3 +377,184 @@ function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
 }
 export { syncFactToLabCard, predictNextVisitDate }; 
 export { autoPlanNextTasks };
+
+function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+  const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  const lab = labCards.find(l => l.id === labId);
+  if (!lab) return null;
+
+  const now = new Date();
+  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
+
+  let earliestEndDate = null;
+
+  // шукаємо найшвидше закінчення реагента
+  lab.devices.forEach(device => {
+    (device.reagents || []).forEach(reagent => {
+      if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
+
+      // середнє споживання
+      let totalUsed = 0;
+      visits.forEach(v => {
+        if (v.labId !== labId) return;
+        (v.devices || []).forEach(d => {
+          if (d.deviceName !== device.device) return;
+          (d.reagents || []).forEach(r => {
+            if (r.name !== reagent.name || !r.fact?.date || !r.fact?.quantity) return;
+            const factDate = new Date(r.fact.date);
+            if (factDate >= startWindow && factDate <= now) {
+              totalUsed += r.fact.quantity;
+            }
+          });
+        });
+      });
+
+      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
+      const dailyRate = totalUsed / daysUsed || 0.01;
+
+      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
+      const endDate = new Date(new Date(reagent.lastDelivery.date).getTime() + daysLeft * 24 * 60 * 60 * 1000);
+
+      if (!earliestEndDate || endDate < earliestEndDate) {
+        earliestEndDate = endDate;
+      }
+    });
+  });
+
+  if (!earliestEndDate) return null;
+
+  // дата наступного візиту = 14 днів до найшвидшого закінчення
+  const nextVisitDate = new Date(earliestEndDate.getTime() - reserveDays * 24 * 60 * 60 * 1000);
+  const dateKey = nextVisitDate.toISOString().split("T")[0];
+
+  // формуємо новий візит
+  const newVisit = {
+    id: `${labId}_${dateKey}`,
+    labId,
+    labName: lab.partner,
+    date: dateKey,
+    devices: lab.devices.map(device => ({
+      deviceName: device.device,
+      forecast: { quantity: 0 },
+      agreement: { quantity: 0 },
+      fact: { quantity: 0, date: "" },
+      testsPerDay: device.testsPerDay || 0,
+      reagents: [
+        ...(device.reagents || []).map(r => ({
+          name: r.name,
+          forecast: { quantity: 0 },
+          agreement: { quantity: 0 },
+          fact: { quantity: 0, date: "" }
+        })),
+        { name: "Сервіс", forecast: { quantity: 0 }, agreement: { quantity: 0 }, fact: { quantity: 0, date: "" } }
+      ]
+    })),
+    notes: "",
+    status: "заплановано"
+  };
+
+  // апсерт по labId+date
+  const existingKey = `${labId}_${dateKey}`;
+  const filtered = visits.filter(v => `${v.labId}_${v.date}` !== existingKey);
+
+  localStorage.setItem("visits", JSON.stringify([...filtered, newVisit]));
+  return newVisit;
+}
+export { scheduleNextVisit };
+function completeVisit(visitId, factUpdates) {
+  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  const idx = visits.findIndex(v => v.id === visitId);
+  if (idx === -1) return;
+
+  // оновлюємо факт у візиті
+  visits[idx].devices.forEach(device => {
+    device.reagents.forEach(r => {
+      if (factUpdates[r.name]) {
+        r.fact = {
+          quantity: factUpdates[r.name].quantity,
+          date: factUpdates[r.name].date
+        };
+      }
+    });
+  });
+
+  // статус "проведено"
+  visits[idx].status = "проведено";
+  localStorage.setItem("visits", JSON.stringify(visits));
+
+  // синхронізація факту у labCard
+  syncFactToLabCard(visits[idx]);
+
+  // створення наступного візиту
+  scheduleNextVisit(visits[idx].labId);
+
+  // оновлення календаря
+  if (typeof window.renderFullCalendar === "function") {
+    window.renderFullCalendar();
+  }
+}
+export { completeVisit };
+// ===== Розпочати =====
+function completeVisit(visitId, factUpdates) {
+  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  const idx = visits.findIndex(v => v.id === visitId);
+  if (idx === -1) return;
+
+  // оновлюємо факт у візиті
+  visits[idx].devices.forEach(device => {
+    device.reagents.forEach(r => {
+      if (factUpdates[r.name]) {
+        r.fact = {
+          quantity: factUpdates[r.name].quantity,
+          date: factUpdates[r.name].date
+        };
+      }
+    });
+  });
+
+  // статус "проведено"
+  visits[idx].status = "проведено";
+  localStorage.setItem("visits", JSON.stringify(visits));
+
+  // синхронізація факту у labCard
+  syncFactToLabCard(visits[idx]);
+
+  // створення наступного візиту
+  scheduleNextVisit(visits[idx].labId);
+
+  // оновлення календаря
+  if (typeof window.renderFullCalendar === "function") {
+    window.renderFullCalendar();
+  }
+}
+
+// ===== Відмінити =====
+function cancelVisit(visitId) {
+  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  const idx = visits.findIndex(v => v.id === visitId);
+  if (idx === -1) return;
+
+  visits[idx].status = "відмінено";
+  localStorage.setItem("visits", JSON.stringify(visits));
+
+  if (typeof window.renderFullCalendar === "function") {
+    window.renderFullCalendar();
+  }
+}
+
+// ===== Перенести =====
+function rescheduleVisit(visitId, newDate) {
+  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  const idx = visits.findIndex(v => v.id === visitId);
+  if (idx === -1) return;
+
+  visits[idx].date = newDate;
+  visits[idx].status = "перенесено";
+  localStorage.setItem("visits", JSON.stringify(visits));
+
+  if (typeof window.renderFullCalendar === "function") {
+    window.renderFullCalendar();
+  }
+}
+export { completeVisit, cancelVisit, rescheduleVisit };
