@@ -287,8 +287,6 @@ function addTableFilters(tableId) {
   const headerRow = table.querySelector("thead tr");
   const filterRow = document.createElement("tr");
 
-  const inputs = [];
-
   headerRow.querySelectorAll("th").forEach((th, i) => {
     const input = document.createElement("input");
     input.type = "text";
@@ -329,24 +327,31 @@ function addTableFilters(tableId) {
         }
       });
       updateOptions();
-      updateGrandTotal(tableId); // перерахунок суми після фільтрації
+      updateGrandTotal(tableId);   // перерахунок суми
+      updateChartFromTable();      // оновлення бар‑графіка
+      buildTrendChart();           // оновлення тренд‑графіка (3 лінії: прогноз, потреба, факт)
     };
 
     th.addEventListener("click", () => {
       updateOptions();
-      updateGrandTotal(tableId); // перерахунок після сортування
+      updateGrandTotal(tableId);
+      updateChartFromTable();
+      buildTrendChart();
     });
 
     const td = document.createElement("td");
     td.appendChild(input);
     td.appendChild(datalist);
     filterRow.appendChild(td);
-
-    inputs.push(input);
   });
 
   table.querySelector("thead").appendChild(filterRow);
+
+  // початкове оновлення графіків
+  updateChartFromTable();
+  buildTrendChart();
 }
+
 function updateGrandTotal(tableId) {
   const table = document.getElementById(tableId);
   let grandTotal = 0;
@@ -355,7 +360,9 @@ function updateGrandTotal(tableId) {
     if (row.style.display === "none") return;
     const sumCell = row.querySelectorAll("td")[3]; // колонка "Сума (грн)"
     if (sumCell) {
-      const val = parseFloat(sumCell.innerText);
+      // прибираємо пробіли тисячних розділювачів
+      const text = sumCell.innerText.replace(/\s/g, "");
+      const val = parseFloat(text);
       if (!isNaN(val)) grandTotal += val;
     }
   });
@@ -363,6 +370,7 @@ function updateGrandTotal(tableId) {
   const totalCell = table.querySelector("tfoot #grandTotal");
   if (totalCell) totalCell.innerText = grandTotal.toFixed(2);
 }
+
 
 
 // ===== Експорт у CSV =====
@@ -663,7 +671,7 @@ function renderDetailedReport(summary, allReagents, title, includeFactDate = fal
     </table>
   `;
 
-  // Підрахунок загальної суми
+  // Підрахунок загальної суми (з урахуванням пробілів у числах)
   let grandTotal = 0;
   Object.entries(summary).forEach(([key, total]) => {
     const reagent = key.split("|")[0];
@@ -671,8 +679,305 @@ function renderDetailedReport(summary, allReagents, title, includeFactDate = fal
     const price = info.price || 0;
     grandTotal += total * price;
   });
+  // форматування без проблем з пробілами
   document.getElementById("grandTotal").innerText = formatNumber(grandTotal);
 
   // Додаємо фільтри
   addTableFilters("reagentTable");
 }
+function updateChartFromTable() {
+  const table = document.getElementById("reagentTable");
+  const rows = table.querySelectorAll("tbody tr");
+
+  const reagents = [];
+  const quantities = [];
+  const costs = [];
+
+  rows.forEach(row => {
+    if (row.style.display === "none") return;
+    const cells = row.querySelectorAll("td");
+    if (cells.length > 3) {
+      reagents.push(cells[0].innerText);
+      quantities.push(parseFloat(cells[1].innerText.replace(/\s/g, "")) || 0);
+      costs.push(parseFloat(cells[3].innerText.replace(/\s/g, "")) || 0);
+    }
+  });
+
+  const traceCost = {
+    x: reagents,
+    y: costs,
+    type: "bar",
+    name: "Сума (грн)",
+    yaxis: "y",
+    marker: { color: "rgba(55, 83, 109, 0.7)" }
+  };
+
+  const traceQty = {
+    x: reagents,
+    y: quantities,
+    type: "bar",
+    name: "Кількість (шт.)",
+    yaxis: "y2",
+    marker: { color: "rgba(26, 118, 255, 0.7)" }
+  };
+
+  const layout = {
+    title: "📊 Графік по реагентах",
+    barmode: "group", // тепер поруч
+    xaxis: { title: "Реагенти" },
+    yaxis: {
+      title: "Сума (грн)",
+      side: "left",
+      showgrid: true
+    },
+    yaxis2: {
+      title: "Кількість (шт.)",
+      side: "right",
+      overlaying: "y",
+      showgrid: false
+    },
+    legend: { orientation: "h", x: 0.3, y: -0.2 }
+  };
+
+  Plotly.newPlot("chartContainer", [traceCost, traceQty], layout);
+}
+function renderTrendChart(forecastData, needsData, factsData) {
+  // forecastData, needsData, factsData — масиви об’єктів {date, sum}
+
+  const forecastTrace = {
+    x: forecastData.map(d => d.date),
+    y: forecastData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Прогноз",
+    line: { color: "orange", width: 2 }
+  };
+
+  const needsTrace = {
+    x: needsData.map(d => d.date),
+    y: needsData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Потреба",
+    line: { color: "blue", width: 2, dash: "dot" }
+  };
+
+  const factsTrace = {
+    x: factsData.map(d => d.date),
+    y: factsData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Факт",
+    line: { color: "green", width: 2 }
+  };
+
+  const layout = {
+    title: "📈 Динаміка прогнозів, потреб та фактів",
+    xaxis: { title: "Дата" },
+    yaxis: { title: "Сума (грн)" },
+    legend: { orientation: "h", x: 0.3, y: -0.2 }
+  };
+
+  Plotly.newPlot("chartContainer", [forecastTrace, needsTrace, factsTrace], layout);
+}
+function collectForecastData() {
+  const labs = JSON.parse(localStorage.getItem("labCards")) || [];
+  const startDate = new Date(document.getElementById("startDate").value);
+  const endDate = new Date(document.getElementById("endDate").value);
+  const allReagents = window.allReagents || {};
+
+  const dailySums = {};
+
+  labs.forEach(lab => {
+    (lab.tasks || []).forEach(task => {
+      if (task.taskType !== "reagents") return;
+      const taskDate = new Date(task.date);
+      if (taskDate < startDate || taskDate > endDate) return;
+
+      const dateKey = taskDate.toISOString().split("T")[0];
+      const price = allReagents[task.reagentName]?.price || 0;
+      const quantity = task.neededQuantity || 0;
+      const sum = quantity * price;
+
+      if (!dailySums[dateKey]) dailySums[dateKey] = 0;
+      dailySums[dateKey] += sum;
+    });
+  });
+
+  return Object.entries(dailySums).map(([date, sum]) => ({ date, sum }));
+}
+
+function collectNeedsData() {
+  const visits = JSON.parse(localStorage.getItem("visits")) || [];
+  const startDate = new Date(document.getElementById("startDate").value);
+  const endDate = new Date(document.getElementById("endDate").value);
+  const allReagents = window.allReagents || {};
+
+  const dailySums = {};
+
+  visits.forEach(v => {
+    const visitDate = new Date(v.date);
+    if (visitDate < startDate || visitDate > endDate) return;
+
+    const dateKey = visitDate.toISOString().split("T")[0];
+
+    (v.devices || []).forEach(device => {
+      (device.reagents || []).forEach(r => {
+        const price = allReagents[r.name]?.price || 0;
+        const quantity = r.agreement?.quantity || 0;
+        const sum = quantity * price;
+
+        if (!dailySums[dateKey]) dailySums[dateKey] = 0;
+        dailySums[dateKey] += sum;
+      });
+    });
+  });
+
+  return Object.entries(dailySums).map(([date, sum]) => ({ date, sum }));
+}
+
+function collectFactsData() {
+  const visits = JSON.parse(localStorage.getItem("visits")) || [];
+  const startDate = new Date(document.getElementById("startDate").value);
+  const endDate = new Date(document.getElementById("endDate").value);
+  const allReagents = window.allReagents || {};
+
+  const dailySums = {};
+
+  visits.forEach(v => {
+    (v.devices || []).forEach(device => {
+      (device.reagents || []).forEach(r => {
+        const factDate = r.fact?.date ? new Date(r.fact.date) : null;
+        if (!factDate || factDate < startDate || factDate > endDate) return;
+
+        const dateKey = factDate.toISOString().split("T")[0];
+        const price = allReagents[r.name]?.price || 0;
+        const quantity = r.fact?.quantity || 0;
+        const sum = quantity * price;
+
+        if (!dailySums[dateKey]) dailySums[dateKey] = 0;
+        dailySums[dateKey] += sum;
+      });
+    });
+  });
+
+  return Object.entries(dailySums).map(([date, sum]) => ({ date, sum }));
+}
+
+function buildTrendChart() {
+  const forecastData = collectForecastData();
+  const needsData = collectNeedsData();
+  const factsData = collectFactsData();
+
+  renderTrendChart(forecastData, needsData, factsData);
+  renderTrendTable(forecastData, needsData, factsData);
+}
+
+function buildTrendChart() {
+  const forecastData = collectForecastData();
+  const needsData = collectNeedsData();
+  const factsData = collectFactsData();
+
+  renderTrendChart(forecastData, needsData, factsData);
+}
+
+function renderTrendChart(forecastData, needsData, factsData) {
+  const forecastTrace = {
+    x: forecastData.map(d => d.date),
+    y: forecastData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Прогноз",
+    line: { color: "orange", width: 2 }
+  };
+
+  const needsTrace = {
+    x: needsData.map(d => d.date),
+    y: needsData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Потреба",
+    line: { color: "blue", width: 2, dash: "dot" }
+  };
+
+  const factsTrace = {
+    x: factsData.map(d => d.date),
+    y: factsData.map(d => d.sum),
+    type: "scatter",
+    mode: "lines+markers",
+    name: "Факт",
+    line: { color: "green", width: 2 }
+  };
+
+  const layout = {
+    title: "📈 Виконання прогнозу",
+    xaxis: { title: "Дата" },
+    yaxis: { title: "Сума (грн)" },
+    legend: { orientation: "h", x: 0.3, y: -0.2 }
+  };
+
+  Plotly.newPlot("trendChartContainer", [forecastTrace, needsTrace, factsTrace], layout);
+}
+function renderTrendTable(forecastData, needsData, factsData) {
+  const container = document.getElementById("trendTableContainer");
+  if (!container) return;
+
+  container.innerHTML = "<h3>📋 Таблиця виконання плану</h3>";
+
+  const allDates = new Set([
+    ...forecastData.map(d => d.date),
+    ...needsData.map(d => d.date),
+    ...factsData.map(d => d.date)
+  ]);
+
+  const rows = [];
+  let totalForecast = 0, totalNeed = 0, totalFact = 0;
+
+  Array.from(allDates).sort().forEach(date => {
+    const forecast = forecastData.find(d => d.date === date)?.sum || 0;
+    const need = needsData.find(d => d.date === date)?.sum || 0;
+    const fact = factsData.find(d => d.date === date)?.sum || 0;
+    const percent = forecast > 0 ? ((fact / forecast) * 100).toFixed(1) + "%" : "—";
+
+    totalForecast += forecast;
+    totalNeed += need;
+    totalFact += fact;
+
+    rows.push(`
+      <tr>
+        <td>${date}</td>
+        <td>${formatNumber(forecast)}</td>
+        <td>${formatNumber(need)}</td>
+        <td>${formatNumber(fact)}</td>
+        <td>${percent}</td>
+      </tr>
+    `);
+  });
+
+  const totalPercent = totalForecast > 0 ? ((totalFact / totalForecast) * 100).toFixed(1) + "%" : "—";
+
+  container.innerHTML += `
+    <table border="1" cellpadding="6" style="border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Прогноз (грн)</th>
+          <th>Потреба (грн)</th>
+          <th>Факт (грн)</th>
+          <th>Виконання (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.join("")}
+        <tr style="font-weight:bold; background:#f0f0f0;">
+          <td>ПІДСУМОК</td>
+          <td>${formatNumber(totalForecast)}</td>
+          <td>${formatNumber(totalNeed)}</td>
+          <td>${formatNumber(totalFact)}</td>
+          <td>${totalPercent}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+

@@ -254,3 +254,126 @@ export default {
     };
   }
 };
+function syncFactToLabCard(visit) {
+  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
+  const lab = labCards.find(l => l.id === visit.labId);
+  if (!lab) return;
+
+  visit.devices.forEach(device => {
+    const labDevice = lab.devices.find(d => d.name === device.name);
+    if (!labDevice) return;
+
+    device.reagents.forEach(r => {
+      const labReagent = labDevice.reagents.find(lr => lr.name === r.name);
+      if (!labReagent || !r.fact?.quantity || !r.fact?.date) return;
+
+      labReagent.lastDelivery = {
+        quantity: r.fact.quantity,
+        date: r.fact.date
+      };
+    });
+  });
+
+  localStorage.setItem("labCards", JSON.stringify(labCards));
+}
+function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
+  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
+  const visits = JSON.parse(localStorage.getItem("visits")) || [];
+  const lab = labCards.find(l => l.id === labId);
+  if (!lab) return [];
+
+  const now = new Date();
+  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
+
+  const predictions = [];
+
+  lab.devices.forEach(device => {
+    device.reagents.forEach(reagent => {
+      const name = reagent.name;
+      const lastDelivery = reagent.lastDelivery;
+      if (!lastDelivery?.quantity || !lastDelivery?.date) return;
+
+      // Знаходимо фактичні витрати за останні N днів
+      let totalUsed = 0;
+      visits.forEach(v => {
+        if (v.labId !== labId) return;
+        (v.devices || []).forEach(d => {
+          if (d.name !== device.name) return;
+          (d.reagents || []).forEach(r => {
+            if (r.name !== name || !r.fact?.date || !r.fact?.quantity) return;
+            const factDate = new Date(r.fact.date);
+            if (factDate >= startWindow && factDate <= now) {
+              totalUsed += r.fact.quantity;
+            }
+          });
+        });
+      });
+
+      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
+      const dailyRate = totalUsed / daysUsed || 0.01; // мінімальний захист від ділення на 0
+
+      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
+      const nextVisitDate = new Date(new Date(reagent.lastDelivery.date).getTime() + (daysLeft - reserveDays) * 24 * 60 * 60 * 1000);
+
+      predictions.push({
+        reagent: name,
+        device: device.name,
+        nextVisitDate: nextVisitDate.toISOString().split("T")[0],
+        daysLeft: Math.round(daysLeft),
+        dailyRate: dailyRate.toFixed(2)
+      });
+    });
+  });
+
+  return predictions;
+}
+
+function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
+  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
+  const visits = JSON.parse(localStorage.getItem("visits")) || [];
+  const lab = labCards.find(l => l.id === labId);
+  if (!lab) return;
+
+  const now = new Date();
+  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
+
+  (lab.devices || []).forEach(device => {
+    (device.reagents || []).forEach(reagent => {
+      if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
+
+      // середнє споживання
+      let totalUsed = 0;
+      visits.forEach(v => {
+        if (v.labId !== labId) return;
+        (v.devices || []).forEach(d => {
+          if (d.name !== device.name) return;
+          (d.reagents || []).forEach(r => {
+            if (r.name !== reagent.name || !r.fact?.date || !r.fact?.quantity) return;
+            const factDate = new Date(r.fact.date);
+            if (factDate >= startWindow && factDate <= now) {
+              totalUsed += r.fact.quantity;
+            }
+          });
+        });
+      });
+
+      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
+      const dailyRate = totalUsed / daysUsed || 0.01;
+
+      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
+      const nextVisitDate = new Date(new Date(reagent.lastDelivery.date).getTime() + (daysLeft - reserveDays) * 24 * 60 * 60 * 1000);
+
+      // додаємо новий task у labCard
+      lab.tasks.push({
+        taskType: "reagents",
+        reagentName: reagent.name,
+        neededQuantity: Math.round(dailyRate * reserveDays), // запас на резервний період
+        date: nextVisitDate.toISOString().split("T")[0]
+      });
+    });
+  });
+
+  localStorage.setItem("labCards", JSON.stringify(labCards));
+}
+export { syncFactToLabCard, predictNextVisitDate }; 
+export { autoPlanNextTasks };
