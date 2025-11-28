@@ -1,5 +1,102 @@
-// Calendar.js — узгоджена версія, яка працює тільки з localStorage.visits у форматі devices
-// Дата зберігається виключно у форматі "YYYY-MM-DD" без toISOString(), щоб уникнути зсувів
+// ===== Глобальні змінні =====
+let currentVisitId = null;
+let calendar = null;
+
+// ===== Допоміжні функції =====
+function statusColor(status) {
+  switch ((status || "").toLowerCase()) {
+    case "в процесі": return "#ff9800";
+    case "відмінено": return "#9e9e9e";
+    case "перенесено": return "#2196f3";
+    case "проведено": return "#4caf50";
+    default: return "#2196f3";
+  }
+}
+function filterByStatus(status) {
+  const s = (status || "заплановано").toLowerCase();
+  if (s === "заплановано") return document.getElementById("filterPlanned").checked;
+  if (s === "в процесі") return document.getElementById("filterInProgress").checked;
+  if (s === "відмінено") return document.getElementById("filterCancelled").checked;
+  if (s === "перенесено") return document.getElementById("filterRescheduled").checked;
+  if (s === "проведено") return document.getElementById("filterDone").checked;
+  return true;
+}
+function loadVisitsLS() {
+  try { return JSON.parse(localStorage.getItem("visits") || "[]"); }
+  catch { return []; }
+}
+function eventsFromVisits(visits) {
+  return visits.filter(v => filterByStatus(v.status)).map(v => ({
+    id: v.id,
+    title: `${v.labName} — ${v.status || "заплановано"}`,
+    start: v.date,
+    backgroundColor: statusColor(v.status),
+    borderColor: statusColor(v.status),
+    extendedProps: { visit: v }
+  }));
+}
+
+// ===== Меню =====
+function showVisitMenu(visit) {
+  currentVisitId = visit.id;
+  document.getElementById("visitMenuInfo").innerHTML = `
+    <p><strong>${visit.labName}</strong></p>
+    <p>Дата: ${visit.date}</p>
+    <p>Статус: ${visit.status || "заплановано"}</p>
+    <p>Завдання:</p>
+    <ul>${(visit.devices||[]).map(d => `<li>${d.deviceName}: ${(d.reagents||[]).map(r => r.name).join(", ")}</li>`).join("")}</ul>
+  `;
+  document.getElementById("visitMenu").classList.add("show");
+}
+function hideVisitMenu() { document.getElementById("visitMenu").classList.remove("show"); }
+
+// ===== Оновлення localStorage =====
+function updateVisitStatusLS(visitId, status) {
+  const visits = loadVisitsLS();
+  const v = visits.find(x => x.id === visitId);
+  if (v) { v.status = status; localStorage.setItem("visits", JSON.stringify(visits)); }
+}
+function rescheduleVisitLS(visitId, newDate) {
+  const visits = loadVisitsLS();
+  const v = visits.find(x => x.id === visitId);
+  if (v) { v.date = newDate; v.status = "перенесено"; localStorage.setItem("visits", JSON.stringify(visits)); }
+}
+
+// ===== Дії меню =====
+function onStartVisit() { updateVisitStatusLS(currentVisitId, "в процесі"); hideVisitMenu(); rerenderCalendar(); }
+function onCancelVisit() { updateVisitStatusLS(currentVisitId, "відмінено"); hideVisitMenu(); rerenderCalendar(); }
+function onRescheduleVisit() {
+  const newDate = prompt("Нова дата (YYYY-MM-DD):");
+  if (!newDate) return;
+  rescheduleVisitLS(currentVisitId, newDate);
+  hideVisitMenu(); rerenderCalendar();
+}
+function onEditLabCard() {
+  const visits = loadVisitsLS();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  localStorage.setItem("editLabCard", JSON.stringify({ labId: v.labId }));
+  window.location.href = "../labcards/labcard.html";
+}
+
+// ===== Ререндер календаря =====
+function rerenderCalendar() {
+  const events = eventsFromVisits(loadVisitsLS());
+  calendar.removeAllEvents();
+  events.forEach(e => calendar.addEvent(e));
+}
+
+// ===== Ініціалізація =====
+document.addEventListener("DOMContentLoaded", () => {
+  const calendarEl = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    locale: "uk",
+    events: eventsFromVisits(loadVisitsLS()),
+    eventClick: info => showVisitMenu(info.event.extendedProps.visit)
+  });
+  calendar.render();
+});
 
 // ===== Утиліти дат =====
 function formatDateYYYYMMDD(dateObj) {
@@ -16,17 +113,18 @@ export function getNextDeliveryDate() {
 }
 
 // ===== Робота зі сховищем =====
-function loadVisits() {
+export function loadVisits() {
   let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-  // міграція tasks → devices
   visits = visits.map(v => normalizeVisit(v));
   localStorage.setItem("visits", JSON.stringify(visits));
   return visits;
 }
-function saveVisits(visits) {
+
+export function saveVisits(visits) {
   localStorage.setItem("visits", JSON.stringify(visits));
 }
-function loadLabCards() {
+
+export function loadLabCards() {
   return JSON.parse(localStorage.getItem("labCards") || "[]");
 }
 
@@ -52,17 +150,8 @@ function normalizeVisit(visit) {
   return visit;
 }
 
-// мігруємо всі visits
-let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-visits = visits.map(v => normalizeVisit(v));
-localStorage.setItem("visits", JSON.stringify(visits));
-console.log(visits);
-
-
 // ===== Генерація візитів на основі labCards =====
-// Допоміжна функція для парсингу кількості з тексту задачі
-function parseReagentTask(taskText) {
-  // шукаємо патерн "Назва (N уп.)"
+export function parseReagentTask(taskText) {
   const match = taskText.match(/(.+?)\s*\((\d+)\s*уп\.\)/);
   if (match) {
     return {
@@ -72,7 +161,6 @@ function parseReagentTask(taskText) {
       fact: { quantity: 0, date: "" }
     };
   }
-  // якщо кількість не знайдена — створюємо базовий об’єкт
   return {
     name: taskText,
     forecast: { quantity: 0 },
@@ -130,7 +218,7 @@ export function generateVisitsFromLabCards() {
           agreement: { quantity: 0 },
           fact: { quantity: 0, date: "" },
           testsPerDay: 0,
-          reagents: [ { name: "Сервіс", forecast: { quantity: 0 }, agreement: { quantity: 0 }, fact: { quantity: 0, date: "" } } ]
+          reagents: [{ name: "Сервіс", forecast: { quantity: 0 }, agreement: { quantity: 0 }, fact: { quantity: 0, date: "" } }]
         }],
         notes: "",
         status: "заплановано"
@@ -149,8 +237,6 @@ export function generateVisitsFromLabCards() {
   return newVisits;
 }
 
-
-
 // ===== Оновлення статусу =====
 export function updateVisitStatus(visitId, status) {
   const visits = loadVisits();
@@ -158,6 +244,9 @@ export function updateVisitStatus(visitId, status) {
   if (idx !== -1) {
     visits[idx].status = status;
     saveVisits(visits);
+    if (typeof window.renderFullCalendar === "function") {
+      window.renderFullCalendar();
+    }
   }
 }
 
@@ -186,20 +275,14 @@ export async function processVisitReport(visitReports) {
 
   generated.forEach(visit => {
     const key = `${visit.labId || visit.lab}_${visit.date}`;
+    // ⚠️ узгоджуємо формат devices
     const normalized = {
       id: `${visit.labId || visit.lab}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       labId: visit.labId || null,
       labName: visit.labName || visit.lab,
       date: visit.date,
-      devices: [{
-        deviceName: visit.tasks?.[0]?.device || "",
-        forecast: { quantity: 0 },
-        agreement: { quantity: 0 },
-        fact: { quantity: 0, date: "" },
-        testsPerDay: 0,
-        reagents: (visit.tasks || []).map(t => t.action || t.title || "")
-      }],
-      notes: "",
+      devices: visit.devices || [],
+      notes: visit.notes || "",
       status: visit.status || "заплановано"
     };
     if (!existingKeys.has(key)) {
@@ -214,13 +297,12 @@ export async function processVisitReport(visitReports) {
   }
 }
 
-
 // ===== Створення вручну =====
 export function createManualVisit({ labId, labName, date, devices = [] }) {
   const visits = loadVisits();
   const normalizedDate = date;
 
-  const filtered = visits.filter(v => !( (v.labId || v.labName) === (labId || labName) && v.date === normalizedDate ));
+  const filtered = visits.filter(v => !((v.labId || v.labName) === (labId || labName) && v.date === normalizedDate));
 
   const newVisit = {
     id: `${labId || labName}_${Date.now()}`,
@@ -236,25 +318,15 @@ export function createManualVisit({ labId, labName, date, devices = [] }) {
   return newVisit;
 }
 
-
 // ===== Фінансові розрахунки =====
-export default {
-  calculateFinancials({
-    devicePrice,
-    reagentCosts,
-    serviceCosts,
-    replacementCosts
-  }) {
-    const totalCosts = reagentCosts + serviceCosts + replacementCosts;
-    const profit = devicePrice - totalCosts;
+export function calculateFinancials({ devicePrice, reagentCosts, serviceCosts, replacementCosts }) {
+  const totalCosts = reagentCosts + serviceCosts + replacementCosts;
+  const profit = devicePrice - totalCosts;
+  return { totalCosts, profit };
+}
 
-    return {
-      totalCosts,
-      profit
-    };
-  }
-};
-function syncFactToLabCard(visit) {
+// ===== Синхронізація факту у labCard =====
+export function syncFactToLabCard(visit) {
   const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
   const lab = labCards.find(l => l.id === visit.labId);
   if (!lab) return;
@@ -276,7 +348,9 @@ function syncFactToLabCard(visit) {
 
   localStorage.setItem("labCards", JSON.stringify(labCards));
 }
-function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
+
+// ===== Прогноз наступного візиту =====
+export function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
   const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
   const visits = JSON.parse(localStorage.getItem("visits")) || [];
   const lab = labCards.find(l => l.id === labId);
@@ -289,59 +363,9 @@ function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
 
   lab.devices.forEach(device => {
     device.reagents.forEach(reagent => {
-      const name = reagent.name;
       const lastDelivery = reagent.lastDelivery;
       if (!lastDelivery?.quantity || !lastDelivery?.date) return;
 
-      // Знаходимо фактичні витрати за останні N днів
-      let totalUsed = 0;
-      visits.forEach(v => {
-        if (v.labId !== labId) return;
-        (v.devices || []).forEach(d => {
-          if (d.name !== device.name) return;
-          (d.reagents || []).forEach(r => {
-            if (r.name !== name || !r.fact?.date || !r.fact?.quantity) return;
-            const factDate = new Date(r.fact.date);
-            if (factDate >= startWindow && factDate <= now) {
-              totalUsed += r.fact.quantity;
-            }
-          });
-        });
-      });
-
-      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
-      const dailyRate = totalUsed / daysUsed || 0.01; // мінімальний захист від ділення на 0
-
-      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
-      const nextVisitDate = new Date(new Date(reagent.lastDelivery.date).getTime() + (daysLeft - reserveDays) * 24 * 60 * 60 * 1000);
-
-      predictions.push({
-        reagent: name,
-        device: device.name,
-        nextVisitDate: nextVisitDate.toISOString().split("T")[0],
-        daysLeft: Math.round(daysLeft),
-        dailyRate: dailyRate.toFixed(2)
-      });
-    });
-  });
-
-  return predictions;
-}
-
-function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
-  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
-  const visits = JSON.parse(localStorage.getItem("visits")) || [];
-  const lab = labCards.find(l => l.id === labId);
-  if (!lab) return;
-
-  const now = new Date();
-  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
-
-  (lab.devices || []).forEach(device => {
-    (device.reagents || []).forEach(reagent => {
-      if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
-
-      // середнє споживання
       let totalUsed = 0;
       visits.forEach(v => {
         if (v.labId !== labId) return;
@@ -363,11 +387,58 @@ function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
       const daysLeft = reagent.lastDelivery.quantity / dailyRate;
       const nextVisitDate = new Date(new Date(reagent.lastDelivery.date).getTime() + (daysLeft - reserveDays) * 24 * 60 * 60 * 1000);
 
-      // додаємо новий task у labCard
+      predictions.push({
+        reagent: reagent.name,
+        device: device.name,
+        nextVisitDate: nextVisitDate.toISOString().split("T")[0],
+        daysLeft: Math.round(daysLeft),
+        dailyRate: dailyRate.toFixed(2)
+      });
+    });
+  });
+
+  return predictions;
+}
+
+// ===== Автопланування задач =====
+export function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
+  const labCards = JSON.parse(localStorage.getItem("labCards")) || [];
+  const visits = JSON.parse(localStorage.getItem("visits")) || [];
+  const lab = labCards.find(l => l.id === labId);
+  if (!lab) return;
+
+  const now = new Date();
+  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
+
+  (lab.devices || []).forEach(device => {
+    (device.reagents || []).forEach(reagent => {
+      if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
+
+      let totalUsed = 0;
+      visits.forEach(v => {
+        if (v.labId !== labId) return;
+        (v.devices || []).forEach(d => {
+          if (d.name !== device.name) return;
+          (d.reagents || []).forEach(r => {
+            if (r.name !== reagent.name || !r.fact?.date || !r.fact?.quantity) return;
+            const factDate = new Date(r.fact.date);
+            if (factDate >= startWindow && factDate <= now) {
+              totalUsed += r.fact.quantity;
+            }
+          });
+        });
+      });
+
+      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
+      const dailyRate = totalUsed / daysUsed || 0.01;
+
+      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
+      const nextVisitDate = new Date(new Date(reagent.lastDelivery.date).getTime() + (daysLeft - reserveDays) * 24 * 60 * 60 * 1000);
+
       lab.tasks.push({
         taskType: "reagents",
         reagentName: reagent.name,
-        neededQuantity: Math.round(dailyRate * reserveDays), // запас на резервний період
+        neededQuantity: Math.round(dailyRate * reserveDays),
         date: nextVisitDate.toISOString().split("T")[0]
       });
     });
@@ -375,10 +446,9 @@ function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
 
   localStorage.setItem("labCards", JSON.stringify(labCards));
 }
-export { syncFactToLabCard, predictNextVisitDate }; 
-export { autoPlanNextTasks };
 
-function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
+// ===== Планування наступного візиту =====
+export function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
   const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
   const visits = JSON.parse(localStorage.getItem("visits") || "[]");
   const lab = labCards.find(l => l.id === labId);
@@ -389,12 +459,10 @@ function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
 
   let earliestEndDate = null;
 
-  // шукаємо найшвидше закінчення реагента
   lab.devices.forEach(device => {
     (device.reagents || []).forEach(reagent => {
       if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
 
-      // середнє споживання
       let totalUsed = 0;
       visits.forEach(v => {
         if (v.labId !== labId) return;
@@ -424,11 +492,9 @@ function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
 
   if (!earliestEndDate) return null;
 
-  // дата наступного візиту = 14 днів до найшвидшого закінчення
   const nextVisitDate = new Date(earliestEndDate.getTime() - reserveDays * 24 * 60 * 60 * 1000);
   const dateKey = nextVisitDate.toISOString().split("T")[0];
 
-  // формуємо новий візит
   const newVisit = {
     id: `${labId}_${dateKey}`,
     labId,
@@ -454,20 +520,19 @@ function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
     status: "заплановано"
   };
 
-  // апсерт по labId+date
   const existingKey = `${labId}_${dateKey}`;
   const filtered = visits.filter(v => `${v.labId}_${v.date}` !== existingKey);
 
   localStorage.setItem("visits", JSON.stringify([...filtered, newVisit]));
   return newVisit;
 }
-export { scheduleNextVisit };
-function completeVisit(visitId, factUpdates) {
+
+// ===== Завершення візиту =====
+export function completeVisit(visitId, factUpdates) {
   let visits = JSON.parse(localStorage.getItem("visits") || "[]");
   const idx = visits.findIndex(v => v.id === visitId);
   if (idx === -1) return;
 
-  // оновлюємо факт у візиті
   visits[idx].devices.forEach(device => {
     device.reagents.forEach(r => {
       if (factUpdates[r.name]) {
@@ -479,58 +544,19 @@ function completeVisit(visitId, factUpdates) {
     });
   });
 
-  // статус "проведено"
   visits[idx].status = "проведено";
   localStorage.setItem("visits", JSON.stringify(visits));
 
-  // синхронізація факту у labCard
   syncFactToLabCard(visits[idx]);
-
-  // створення наступного візиту
   scheduleNextVisit(visits[idx].labId);
 
-  // оновлення календаря
-  if (typeof window.renderFullCalendar === "function") {
-    window.renderFullCalendar();
-  }
-}
-export { completeVisit };
-// ===== Розпочати =====
-function completeVisit(visitId, factUpdates) {
-  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-  const idx = visits.findIndex(v => v.id === visitId);
-  if (idx === -1) return;
-
-  // оновлюємо факт у візиті
-  visits[idx].devices.forEach(device => {
-    device.reagents.forEach(r => {
-      if (factUpdates[r.name]) {
-        r.fact = {
-          quantity: factUpdates[r.name].quantity,
-          date: factUpdates[r.name].date
-        };
-      }
-    });
-  });
-
-  // статус "проведено"
-  visits[idx].status = "проведено";
-  localStorage.setItem("visits", JSON.stringify(visits));
-
-  // синхронізація факту у labCard
-  syncFactToLabCard(visits[idx]);
-
-  // створення наступного візиту
-  scheduleNextVisit(visits[idx].labId);
-
-  // оновлення календаря
   if (typeof window.renderFullCalendar === "function") {
     window.renderFullCalendar();
   }
 }
 
 // ===== Відмінити =====
-function cancelVisit(visitId) {
+export function cancelVisit(visitId) {
   let visits = JSON.parse(localStorage.getItem("visits") || "[]");
   const idx = visits.findIndex(v => v.id === visitId);
   if (idx === -1) return;
@@ -544,7 +570,7 @@ function cancelVisit(visitId) {
 }
 
 // ===== Перенести =====
-function rescheduleVisit(visitId, newDate) {
+export function rescheduleVisit(visitId, newDate) {
   let visits = JSON.parse(localStorage.getItem("visits") || "[]");
   const idx = visits.findIndex(v => v.id === visitId);
   if (idx === -1) return;
@@ -557,4 +583,3 @@ function rescheduleVisit(visitId, newDate) {
     window.renderFullCalendar();
   }
 }
-export { completeVisit, cancelVisit, rescheduleVisit };
