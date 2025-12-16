@@ -93,15 +93,56 @@ function cancelVisit(visitId) {
 }
 
 // ===== Перенести =====
-    function rescheduleVisitLS(visitId, newDate) {
-      const visits = loadVisits();
-      const v = visits.find(x => x.id === visitId);
-      if (v) {
-        v.date = newDate;
-        v.status = "перенесено";
-        localStorage.setItem("visits", JSON.stringify(visits));
-      }
-    }
+function rescheduleVisit(visitId) {
+  // Remove existing modal if any
+  const existing = document.getElementById("rescheduleModal");
+  if (existing) existing.remove();
+
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const modalHtml = `
+    <div id="rescheduleModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeRescheduleModal()">&times;</span>
+        <h3>Перенесення візиту</h3>
+        <label>Оберіть нову дату:
+          <input type="date" id="newVisitDate" value="${v.date}">
+        </label>
+        <div class="modal-actions" style="margin-top:12px;text-align:right;">
+          <button onclick="confirmReschedule('${visitId}')">✅ Зберегти</button>
+          <button onclick="closeRescheduleModal()">❌ Скасувати</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  document.getElementById("rescheduleModal").style.display = "block";
+}
+
+function confirmReschedule(visitId) {
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const newDate = document.getElementById("newVisitDate").value;
+  if (!newDate) return;
+
+  v.date = newDate;
+  v.status = "перенесено"; // mark rescheduled
+  saveVisits(visits);
+
+  closeRescheduleModal();
+  hideVisitMenu();
+  rerenderCalendar();
+}
+
+function closeRescheduleModal() {
+  const modal = document.getElementById("rescheduleModal");
+  if (modal) modal.remove();
+}
+
 
 // ===== Створення вручну =====
 function createManualVisit({ labId, labName, date, devices = [] }) {

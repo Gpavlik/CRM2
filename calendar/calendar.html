@@ -120,6 +120,7 @@
   padding: 4px;
   text-align: center;
 }
+
   </style>
 </head>
 <body>
@@ -133,6 +134,7 @@
     <label><input type="checkbox" id="filterRescheduled" checked> Перенесено</label>
     <label><input type="checkbox" id="filterDone" checked> Проведено</label>
     <button onclick="rerenderCalendar()">🔄 Оновити</button>
+<a href="../labcards/index.html"><button>🏥 Перейти до лабораторій</button></a>
   </div>
 
   <!-- Календар -->
@@ -143,12 +145,12 @@
     <h4 id="visitMenuTitle">Меню візиту</h4>
     <div id="visitMenuInfo"></div>
     <div class="menu-actions">
-      <button class="btn-start" onclick="onStartVisit()">Розпочати</button>
-      <button class="btn-cancel" onclick="onCancelVisit()">Відмінити</button>
-      <button class="btn-reschedule" onclick="onRescheduleVisit()">Перенести</button>
-      <button class="btn-edit" onclick="onEditLabCard()">Редагувати картку</button>
-      <button class="btn-close" onclick="hideVisitMenu()">Закрити</button>
-    </div>
+  <button class="btn-start">Розпочати</button>
+  <button class="btn-cancel">Відмінити</button>
+  <button class="btn-reschedule">Перенести</button>
+  <button class="btn-edit">Редагувати картку</button>
+  <button class="btn-close" onclick="hideVisitMenu()">Закрити</button>
+</div>
   </div>
 
   <!-- Модальне вікно -->

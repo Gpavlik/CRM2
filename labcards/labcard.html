@@ -1,8 +1,9 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="uk">
 <head>
   <link rel="icon" href="data:,">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🧪 Лабораторна картка</title>
   <style>
     body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
@@ -81,6 +82,9 @@
   font-size: 13px;
   color: #333;
 }
+.hidden {
+  display: none;
+}
   </style>
 </head>
 <body>
@@ -116,7 +120,7 @@
   <label for="labManager">👤 Відповідальний менеджер:</label>
   <input type="text" id="labManager" placeholder="ПІБ менеджера">
  <!-- спочатку прихована -->
-<div id="devicesSection" style="display:none;">
+<div id="devicesSection" class="hidden">
   <h3>🔧 Прилади</h3>
   <div id="devicesContainer"></div> 
 </div>

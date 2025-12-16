@@ -35,7 +35,7 @@ function toISODateLocal(date) {
 }
 
 function loadLPZList() {
-  fetch("./lpzlist.json")
+  fetch("https://nodejs-production-7176.up.railway.app/lpz") // бекенд маршрут
     .then(res => res.json())
     .then(data => {
       console.log("LPZ list loaded:", data);
@@ -45,8 +45,9 @@ function loadLPZList() {
       updateCityList();
       updateLPZList();
     })
-    .catch(err => console.error("❌ Помилка завантаження lpzlist.json:", err));
+    .catch(err => console.error("❌ Помилка завантаження LPZ:", err));
 }
+
 
 function updateRegionList() {
   const list = document.getElementById("region-list");
@@ -81,62 +82,61 @@ function updateLPZList() {
   });
 }
 
-function onRegionInput() {
-  const regionEl = document.getElementById("region");
-  if (!regionEl) return;
-  const region = regionEl.value.toLowerCase();
-  filteredList = lpzList.filter(l => l.region.toLowerCase().includes(region));
-  updateCityList();
-  updateLPZList();
-  autoFillIfSingle();
+async function applyFilters() {
+  try {
+    // 🔧 Тягнемо всі лабораторії з бекенду
+    const res = await fetch("https://nodejs-production-7176.up.railway.app/labcards");
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити лабораторії");
+    }
+    const labCards = await res.json();
+
+    // 🔧 Збираємо значення фільтрів
+    const name = document.getElementById("filterName")?.value.trim() || "";
+    const region = document.getElementById("filterRegion")?.value.trim() || "";
+    const city = document.getElementById("filterCity")?.value.trim() || "";
+    const institution = document.getElementById("filterInstitution")?.value.trim() || "";
+    const device = document.getElementById("filterDevice")?.value.trim() || "";
+    const contractor = document.getElementById("filterContractor")?.value.trim() || "";
+    const phone = document.getElementById("filterPhone")?.value.trim() || "";
+    const edrpou = document.getElementById("filterEdrpou")?.value.trim() || "";
+    const manager = document.getElementById("filterManager")?.value.trim() || "";
+    const kp = document.getElementById("kpFilter")?.value.trim() || "";
+
+    // 🔧 Фільтрація
+    const filtered = labCards.filter(l =>
+      (!name || l.partner?.toLowerCase().includes(name.toLowerCase())) &&
+      (!region || l.region === region) &&
+      (!city || l.city === city) &&
+      (!institution || l.institution === institution) &&
+      (!device || l.devices.some(d => d.device === device)) &&
+      (!contractor || l.contractor === contractor) &&
+      (!phone || l.phone === phone) &&
+      (!edrpou || l.edrpou === edrpou) &&
+      (!manager || l.manager === manager) &&
+      (!kp || l.devices.some(d => d.kp === kp))
+    );
+
+    // 🔧 Рендеримо відфільтровані лабораторії
+    renderLabCards(filtered);
+
+  } catch (err) {
+    console.error("❌ Помилка при фільтрації лабораторій:", err);
+    alert("⚠️ Не вдалося застосувати фільтри. Перевірте консоль.");
+  }
 }
 
-function onCityInput() {
-  const regionEl = document.getElementById("region");
-  const cityEl = document.getElementById("city");
-  if (!regionEl || !cityEl) return;
-  const region = regionEl.value.toLowerCase();
-  const city = cityEl.value.toLowerCase();
-  filteredList = lpzList.filter(l =>
-    l.region.toLowerCase().includes(region) &&
-    l.city.toLowerCase().includes(city)
-  );
-  updateLPZList();
-  autoFillIfSingle();
-}
 
-function onLPZInput() {
-  const regionEl = document.getElementById("region");
-  const cityEl = document.getElementById("city");
-  const lpzEl = document.getElementById("lpz");
-  if (!regionEl || !cityEl || !lpzEl) return;
-  const region = regionEl.value.toLowerCase();
-  const city = cityEl.value.toLowerCase();
-  const name = lpzEl.value.toLowerCase();
-  filteredList = lpzList.filter(l =>
-    l.region.toLowerCase().includes(region) &&
-    l.city.toLowerCase().includes(city) &&
-    l.name.toLowerCase().includes(name)
-  );
-  autoFillIfSingle();
-}
 
 function autoFillIfSingle() {
   if (filteredList.length === 1) {
     const l = filteredList[0];
-    const regionEl = document.getElementById("region");
-    const cityEl = document.getElementById("city");
-    const lpzEl = document.getElementById("lpz");
-    const addrEl = document.getElementById("labAddress");
-    const edrpouEl = document.getElementById("labEdrpou");
-    const managerEl = document.getElementById("labManager");
-
-    if (regionEl) regionEl.value = l.region;
-    if (cityEl) cityEl.value = l.city;
-    if (lpzEl) lpzEl.value = l.name;
-    if (addrEl) addrEl.value = l.address;
-    if (edrpouEl) edrpouEl.value = l.edrpou || "";
-    if (managerEl) managerEl.value = l.manager || "";
+    setValue("region", l.region);
+    setValue("city", l.city);
+    setValue("lpz", l.name);
+    setValue("labAddress", l.address);
+    setValue("labEdrpou", l.edrpou);
+    setValue("labManager", l.manager);
   }
 }
 
@@ -150,6 +150,44 @@ function setValue(id, value) {
     console.warn(`⚠️ Елемент з id="${id}" не знайдено`);
   }
 }
+
+
+function lpzToLabCard(lpz) {
+  const today = new Date();
+
+  return {
+    id: lpz.edrpou || `${Date.now()}`,
+    partner: lpz.name,
+    region: lpz.region,
+    city: lpz.city,
+    institution: lpz.name,
+    address: lpz.address,
+    contractor: "", // можна додати з іншого джерела
+    phone: "",
+    edrpou: lpz.edrpou,
+    manager: "",
+    devices: lpz.devices.map(d => ({
+      device: d.name,
+      soldDate: d.lastPurchases?.[0]?.date || null,
+      lastService: null,
+      workType: null,
+      replacedParts: null,
+      kp: null,
+      testCount: 0,
+      analyses: {},
+      reagentsInfo: {}
+    })),
+    tasks: [],
+    lastUpdated: today.toISOString(),
+    saveDate: today.toISOString()
+  };
+}
+
+const deviceTasks = await generateDeviceTasksWithDueDates(labCard);
+const monthlyVisits = await generateMonthlyLabVisits(deviceTasks);
+
+labCard.tasks = deviceTasks;
+
 
 // 🔧 Ініціалізація картки лабораторії
 function initLabCard() {
@@ -539,99 +577,70 @@ function renderAnalysisFields(index, config, prefill = null) {
   });
 }
 
-function generateDeviceTasksWithDueDates(lab) {
-  const tasks = [];
-  const baseDate = new Date(lab.saveDate || new Date());
-  const endDate = new Date(baseDate);
-  endDate.setFullYear(endDate.getFullYear() + 1);
+async function generateDeviceTasksWithDueDates(lab) {
+  try {
+    const tasks = [];
 
-  for (const device of lab.devices) {
-    const { device: deviceName, testCount, reagentsInfo } = device;
-    const configKey = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-    const config = calculators[configKey];
-    if (!config || !config.reagents?.length) continue;
+    // 🔧 Генеруємо задачі для кожного приладу
+    for (const device of lab.devices || []) {
+      // Сервісна задача
+      if (device.lastService) {
+        const nextServiceDate = new Date(device.lastService);
+        nextServiceDate.setMonth(nextServiceDate.getMonth() + 6); // кожні 6 місяців
 
-    for (let q = 1; q <= 4; q++) {
-      const due = new Date(baseDate);
-      due.setMonth(due.getMonth() + q * 3);
-      const dueStr = toISODateLocal(due);
-
-      // сервіс раз на півроку
-      if (q % 2 === 0) {
         tasks.push({
-          lab: lab.partner,
-          city: lab.city,
-          device: deviceName,
+          id: `${lab.id}_${device.device}_service_${Date.now()}`,
+          labId: lab.id,
+          device: device.device,
+          title: `Плановий сервіс приладу ${device.device}`,
+          date: nextServiceDate.toISOString().split("T")[0],
           taskType: "service",
-          title: `Плановий сервіс приладу ${deviceName}`,
-          date: dueStr,
-          priority: "🟢",
-          source: "auto"
+          priority: "🔧"
         });
       }
 
-      // реагенти
-      for (const r of config.reagents) {
-        const reagentData = reagentsInfo?.[r.name];
-        const perTest = Number(r.perTest) || 0;
-        const startup = Number(r.startup) || 0;
-        const shutdown = Number(r.shutdown) || 0;
-        const volume = Number(r.packageSize) || 0;
-        if (!volume) continue;
+      // Реагенти
+      if (device.reagentsInfo) {
+        for (const [reagentName, info] of Object.entries(device.reagentsInfo)) {
+          const nextOrderDate = info.lastOrderDate
+            ? new Date(info.lastOrderDate)
+            : new Date();
+          nextOrderDate.setMonth(nextOrderDate.getMonth() + 1); // щомісячне замовлення
 
-        const daily = (perTest * testCount) + startup + shutdown;
-        if (daily <= 0) continue;
-
-        const neededQuantityQuarter = Math.ceil((daily * 63) / volume);
-
-        if (!reagentData || !reagentData.lastOrderDate) {
-          if (q === 1) {
-            tasks.push({
-              lab: lab.partner,
-              city: lab.city,
-              device: deviceName,
-              taskType: "reagents",
-              reagentName: r.name,
-              neededQuantity: neededQuantityQuarter,
-              title: `Закупівля реагенту ${r.name} (квартальна потреба: ${neededQuantityQuarter} уп.)`,
-              date: dueStr,
-              priority: "🔴",
-              source: "auto"
-            });
-          }
-          continue;
-        }
-
-        const lastOrderDate = new Date(reagentData.lastOrderDate);
-        const daysAvailable = reagentData.lastOrderCount
-          ? Math.floor((reagentData.lastOrderCount * volume) / daily)
-          : 0;
-
-        const deltaDays = Math.round((due - lastOrderDate) / (1000 * 60 * 60 * 24));
-
-        if (daysAvailable < 14 || deltaDays >= daysAvailable) {
           tasks.push({
-            lab: lab.partner,
-            city: lab.city,
-            device: deviceName,
+            id: `${lab.id}_${device.device}_reagent_${Date.now()}`,
+            labId: lab.id,
+            device: device.device,
+            title: `Замовлення реагенту ${reagentName}`,
+            date: nextOrderDate.toISOString().split("T")[0],
             taskType: "reagents",
-            reagentName: r.name,
-            neededQuantity: neededQuantityQuarter,
-            title: `Закупівля реагенту ${r.name} (квартальна потреба: ${neededQuantityQuarter} уп.)`,
-            date: dueStr,
-            priority: "🟡",
-            source: "auto"
+            reagentName,
+            neededQuantity: info.lastOrderCount || 0,
+            priority: "🧪"
           });
         }
       }
     }
-  }
 
-  return tasks.filter(t => {
-    const d = new Date(t.date);
-    return d instanceof Date && !isNaN(d) && d <= endDate;
-  });
+    // 🔧 Зберігаємо задачі у бекенд Railway
+    if (tasks.length > 0) {
+      await fetch("https://nodejs-production-7176.up.railway.app/tasks/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tasks)
+      });
+      console.log(`✅ Задачі для лабораторії ${lab.partner} збережено у бекенд`);
+    }
+
+    return tasks;
+
+  } catch (err) {
+    console.error("❌ Помилка при генерації задач:", err);
+    alert("⚠️ Не вдалося згенерувати задачі. Перевірте консоль.");
+    return [];
+  }
 }
+
 function preferTueThu(date) {
   if (!(date instanceof Date) || isNaN(date)) return date;
 
@@ -665,129 +674,246 @@ function nextWorkingDay(date) {
   return newDate;
 }
 
-async function generateMonthlyLabVisits(allDeviceTasks) {
-  const visitsByLab = {};
-  const today = new Date();
-
-  for (const task of allDeviceTasks) {
-    const labKey = `${task.lab}__${task.city}`;
-    if (!visitsByLab[labKey]) visitsByLab[labKey] = [];
-    visitsByLab[labKey].push(task);
-  }
-
-  const monthlyVisits = [];
-
-  for (const labKey in visitsByLab) {
-    const [labName, city] = labKey.split("__");
-    const tasks = visitsByLab[labKey];
-    const buckets = {};
-
-    for (const t of tasks) {
-      const d = new Date(t.date);
-      if (isNaN(d)) continue;
-      d.setDate(d.getDate() - 14);
-
-      const planned = preferTueThu(nextWorkingDay(d));
-      const key = `${planned.getFullYear()}-${String(planned.getMonth() + 1).padStart(2, "0")}`;
-
-      if (!buckets[key]) buckets[key] = [];
-      buckets[key].push(t);
+async function generateMonthlyLabVisits(tasks) {
+  try {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return [];
     }
 
-    for (const monthKey in buckets) {
-      const visitTasks = buckets[monthKey];
+    // 🔧 Групуємо задачі по місяцях
+    const visitsByMonth = {};
+    tasks.forEach(task => {
+      const date = new Date(task.date);
+      if (isNaN(date)) return;
 
-      const preferredDate = visitTasks
-        .map(t => {
-          const d = new Date(t.date);
-          if (isNaN(d)) return null;
-          d.setDate(d.getDate() - 14);
-          return preferTueThu(nextWorkingDay(d));
-        })
-        .filter(Boolean)
-        .sort((a, b) => a - b)[0];
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!visitsByMonth[monthKey]) visitsByMonth[monthKey] = [];
+      visitsByMonth[monthKey].push(task);
+    });
 
-      if (!preferredDate) continue;
+    const visitsPayload = [];
 
-      const scheduledDate = toISODateLocal(preferredDate);
+    // 🔧 Формуємо візити для кожного місяця
+    for (const [monthKey, monthTasks] of Object.entries(visitsByMonth)) {
+      const visitDate = monthTasks[0].date; // перша задача визначає дату візиту
+      const labId = monthTasks[0].labId;
+      const labName = monthTasks[0].labName || "—";
 
-      monthlyVisits.push({
-        type: "labVisit",
-        title: `🔍 Візит до лабораторії ${labName}`,
-        date: scheduledDate,
-        lab: labName,
-        city,
-        tasks: visitTasks.map(t => ({
-          device: t.device,
-          action: t.taskType === "reagents"
-            ? `Замов реагент — ${t.reagentName} (${t.neededQuantity} уп.)`
-            : "Сервіс",
-          priority: "🟢"
-        }))
+      const visit = {
+        id: `${labId}_${monthKey}_${Date.now()}`,
+        labId,
+        labName,
+        date: visitDate,
+        tasks: monthTasks,
+        status: "заплановано"
+      };
+
+      visitsPayload.push(visit);
+    }
+
+    // 🔧 Зберігаємо всі візити у бекенд Railway
+    if (visitsPayload.length > 0) {
+      await fetch("https://nodejs-production-7176.up.railway.app/visits/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(visitsPayload)
       });
+      console.log(`✅ Збережено ${visitsPayload.length} візитів у бекенд`);
     }
-  }
 
-  monthlyVisits.sort((a, b) => new Date(a.date) - new Date(b.date));
-  return monthlyVisits;
+    return visitsPayload;
+
+  } catch (err) {
+    console.error("❌ Помилка при генерації місячних візитів:", err);
+    alert("⚠️ Не вдалося згенерувати місячні візити. Перевірте консоль.");
+    return [];
+  }
 }
 
-async function generateAllLabVisits(labs) {
-  const allDeviceTasks = [];
 
-  for (const lab of labs) {
-    const labTasks = await generateDeviceTasksWithDueDates(lab);
-    allDeviceTasks.push(...labTasks);
+
+async function generateAllLabVisits() {
+  try {
+    // 🔧 Тягнемо всі лабораторії з бекенду
+    const res = await fetch("https://nodejs-production-7176.up.railway.app/labcards");
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити лабораторії");
+    }
+    const labs = await res.json();
+
+    if (!Array.isArray(labs) || labs.length === 0) {
+      alert("⚠️ Лабораторій не знайдено.");
+      return;
+    }
+
+    // 🔧 Для кожної лабораторії генеруємо задачі та візити
+    for (const lab of labs) {
+      const tasks = await generateDeviceTasksWithDueDates(lab);
+      const monthlyVisits = await generateMonthlyLabVisits(tasks);
+
+      // 🔧 Формуємо візити для бекенду
+      const visitsPayload = monthlyVisits.map(v => ({
+        id: `${lab.id}_${v.date}_${Date.now()}`,
+        labId: lab.id,
+        labName: lab.partner,
+        date: v.date,
+        tasks: v.tasks,
+        status: "заплановано"
+      }));
+
+      // 🔧 Відправляємо у бекенд Railway
+      await fetch("https://nodejs-production-7176.up.railway.app/visits/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(visitsPayload)
+      });
+
+      console.log(`✅ Згенеровано та збережено візити для лабораторії: ${lab.partner}`);
+    }
+
+    alert("✅ Всі візити згенеровано та збережено у бекенд!");
+
+  } catch (err) {
+    console.error("❌ Помилка при генерації візитів:", err);
+    alert("⚠️ Не вдалося згенерувати візити. Перевірте консоль.");
   }
-
- const monthlyVisits = await generateMonthlyLabVisits(allDeviceTasks);
-  return monthlyVisits;
 }
-function applyFieldUpdatesFromVisits(labs, visitReports) {
-  const updatedLabs = JSON.parse(JSON.stringify(labs));
 
-  for (const report of visitReports) {
-    const lab = updatedLabs.find(l => l.partner === report.lab);
-    if (!lab) continue;
+async function applyFieldUpdatesFromVisits() {
+  try {
+    // 🔧 Тягнемо всі візити з бекенду
+    const res = await fetch("https://nodejs-production-7176.up.railway.app/visits");
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити візити");
+    }
+    const visits = await res.json();
 
-    for (const update of report.updates) {
-      const device = lab.devices.find(d => d.device === update.device);
-      if (!device) continue;
+    if (!Array.isArray(visits) || visits.length === 0) {
+      alert("⚠️ Візитів не знайдено.");
+      return;
+    }
 
-      // гарантуємо, що reagentsInfo існує
-      device.reagentsInfo = device.reagentsInfo || {};
+    // 🔧 Групуємо візити по лабораторіях
+    const visitsByLab = {};
+    visits.forEach(v => {
+      if (!visitsByLab[v.labId]) visitsByLab[v.labId] = [];
+      visitsByLab[v.labId].push(v);
+    });
 
-      if (update.type === "reagents") {
-        if (update.action === "ordered") {
-          const info = device.reagentsInfo[update.name] || {};
-          info.lastOrderCount = update.count;
-          info.lastOrderDate = toISODateLocal(new Date(update.date)); // ✅ нормалізація
-          device.reagentsInfo[update.name] = info;
-        }
+    // 🔧 Для кожної лабораторії оновлюємо поля
+    for (const labId of Object.keys(visitsByLab)) {
+      const labRes = await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`);
+      if (!labRes.ok) continue;
+      const lab = await labRes.json();
 
-        if (update.action === "postponed") {
-          device.reagentsInfo[update.name] = device.reagentsInfo[update.name] || {};
-          device.reagentsInfo[update.name].postponed = true;
+      const labVisits = visitsByLab[labId];
+
+      // 🔧 Оновлюємо поля на основі задач
+      for (const visit of labVisits) {
+        if (visit.status !== "виконано") continue;
+
+        for (const task of visit.tasks || []) {
+          if (task.taskType === "service") {
+            // оновлюємо дату останнього сервісу
+            const device = lab.devices.find(d => d.device === task.device);
+            if (device) {
+              device.lastService = task.date;
+            }
+          }
+
+          if (task.taskType === "reagents") {
+            // оновлюємо дату останнього замовлення реагентів
+            const device = lab.devices.find(d => d.device === task.device);
+            if (device) {
+              if (!device.reagentsInfo) device.reagentsInfo = {};
+              device.reagentsInfo[task.reagentName] = {
+                lastOrderDate: task.date,
+                lastOrderCount: task.neededQuantity
+              };
+            }
+          }
         }
       }
 
-      if (update.type === "service" && update.action === "done") {
-        device.lastService = toISODateLocal(new Date(update.date)); // ✅ нормалізація
-      }
-    }
-  }
+      // 🔧 Відправляємо оновлену лабораторію у бекенд
+      await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lab)
+      });
 
-  return updatedLabs;
+      console.log(`✅ Оновлено лабораторію: ${lab.partner}`);
+    }
+
+    alert("✅ Поля лабораторій оновлено на основі виконаних візитів!");
+
+  } catch (err) {
+    console.error("❌ Помилка при оновленні лабораторій:", err);
+    alert("⚠️ Не вдалося оновити лабораторії. Перевірте консоль.");
+  }
 }
 
-async function processVisitReport(visitReports) {
-  const allLabs = loadAllLabCards();
-  const updatedLabs = applyFieldUpdatesFromVisits(allLabs, visitReports);
-  const newVisits = await generateAllLabVisits(updatedLabs);
 
-  saveAllLabCards(updatedLabs);
-  localStorage.setItem("visits", JSON.stringify(newVisits)); // ✅ гарантуємо, що пишемо у visits
-  renderVisitPlanner(newVisits);
+async function processVisitReport(visitId, reportData) {
+  try {
+    // 🔧 Тягнемо візит з бекенду
+    const res = await fetch(`https://nodejs-production-7176.up.railway.app/visits/${visitId}`);
+    if (!res.ok) {
+      throw new Error("Не вдалося знайти візит");
+    }
+    const visit = await res.json();
+
+    // 🔧 Оновлюємо статус візиту
+    visit.status = "виконано";
+    visit.report = reportData;
+
+    // 🔧 Зберігаємо оновлений візит у бекенд
+    await fetch(`https://nodejs-production-7176.up.railway.app/visits/${visitId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(visit)
+    });
+
+    // 🔧 Тягнемо лабораторію
+    const labRes = await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${visit.labId}`);
+    if (!labRes.ok) {
+      throw new Error("Не вдалося знайти лабораторію");
+    }
+    const lab = await labRes.json();
+
+    // 🔧 Оновлюємо поля лабораторії на основі задач у звіті
+    for (const task of visit.tasks || []) {
+      if (task.taskType === "service") {
+        const device = lab.devices.find(d => d.device === task.device);
+        if (device) {
+          device.lastService = task.date;
+        }
+      }
+      if (task.taskType === "reagents") {
+        const device = lab.devices.find(d => d.device === task.device);
+        if (device) {
+          if (!device.reagentsInfo) device.reagentsInfo = {};
+          device.reagentsInfo[task.reagentName] = {
+            lastOrderDate: task.date,
+            lastOrderCount: task.neededQuantity
+          };
+        }
+      }
+    }
+
+    // 🔧 Зберігаємо оновлену лабораторію у бекенд
+    await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${lab.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lab)
+    });
+
+    alert("✅ Звіт оброблено, візит та лабораторія оновлені у бекенд!");
+
+  } catch (err) {
+    console.error("❌ Помилка при обробці звіту:", err);
+    alert("⚠️ Не вдалося обробити звіт. Перевірте консоль.");
+  }
 }
 
 
@@ -839,6 +965,7 @@ async function saveLabCard() {
         analyses: {},
         reagentsInfo: {}
       };
+      
 
       // 🔧 Аналізи для LS-1100
       if (deviceName === "LS-1100" && config?.analyses) {
@@ -896,6 +1023,32 @@ async function saveLabCard() {
 
     labCard.tasks = deviceTasks;
 
+    // 🔧 Відправка у бекенд Railway
+    await fetch("https://nodejs-production-7176.up.railway.app/labcards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(labCard)
+    });
+
+    await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(monthlyVisits.map(v => ({
+        id: `${labCard.id}_${v.date}_${Date.now()}`,
+        labId: labCard.id,
+        labName: labCard.partner,
+        date: v.date,
+        tasks: v.tasks,
+        status: "заплановано"
+      })))
+    });
+
+    alert("✅ Лабораторію збережено і візити відправлено у бекенд!");
+
+    setTimeout(() => {
+      window.location.href = "./index.html";
+    }, 500);
+    
     // 🔧 Зберігаємо лабораторію
     let allCards = JSON.parse(localStorage.getItem("labCards") || "[]");
     const idx = allCards.findIndex(c => c.id === labCard.id);
@@ -916,6 +1069,25 @@ async function saveLabCard() {
       });
     });
     localStorage.setItem("visits", JSON.stringify(visits));
+    // 🔧 Виклик прев’ю перед збереженням
+    showTaskPreviewBeforeSave(labCard, async () => {
+      try {
+        // Збереження лабораторії у бекенд
+        await fetch("https://nodejs-production-7176.up.railway.app/labcards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(labCard)
+        });
+
+        alert("✅ Лабораторію збережено у бекенд!");
+        setTimeout(() => {
+          window.location.href = "./index.html";
+        }, 500);
+      } catch (err) {
+        console.error("❌ Помилка при збереженні лабораторії:", err);
+        alert("⚠️ Не вдалося зберегти лабораторію. Перевірте консоль.");
+      }
+    });
 
     // ✅ Модальне вікно
     if (typeof showVisitsModal === "function") {
@@ -937,214 +1109,309 @@ async function saveLabCard() {
 
 
 
-function deleteLab(index) {
+async function deleteLab(labId) {
   if (!confirm("❌ Ви впевнені, що хочете видалити цю лабораторію?")) return;
-  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
-  const lab = labCards[index];
-  labCards.splice(index, 1);
-  localStorage.setItem("labCards", JSON.stringify(labCards));
 
-  // 🔧 Видаляємо всі візити цієї лабораторії за id
-  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-  visits = visits.filter(v => v.labId !== lab.id);
-  localStorage.setItem("visits", JSON.stringify(visits));
+  try {
+    // 🔧 Видаляємо лабораторію з бекенду
+    await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`, {
+      method: "DELETE"
+    });
 
-  renderLabCards(labCards);
+    // 🔧 Видаляємо всі візити цієї лабораторії
+    await fetch(`https://nodejs-production-7176.up.railway.app/visits/byLab/${labId}`, {
+      method: "DELETE"
+    });
+
+    alert("✅ Лабораторію та її візити видалено з бекенду!");
+
+    // 🔧 Перерендеримо список
+    renderLabCards();
+
+  } catch (err) {
+    console.error("❌ Помилка при видаленні лабораторії:", err);
+    alert("⚠️ Не вдалося видалити лабораторію. Перевірте консоль.");
+  }
 }
 
-function editLabCard(index) {
-  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
-  const lab = labCards[index];
-  localStorage.setItem("editLabCard", JSON.stringify({ lab }));
-  window.location.href = "labcard.html";
+
+async function editLabCard(labId) {
+  try {
+    // 🔧 Тягнемо дані лабораторії з бекенду
+    const res = await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`);
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити лабораторію для редагування");
+    }
+    const lab = await res.json();
+
+    // 🔧 Зберігаємо у sessionStorage (щоб передати на labcard.html)
+    sessionStorage.setItem("editLabCard", JSON.stringify({ lab }));
+
+    // 🔧 Перенаправляємо на форму редагування
+    window.location.href = "labcard.html";
+
+  } catch (err) {
+    console.error("❌ Помилка при редагуванні лабораторії:", err);
+    alert("⚠️ Не вдалося відкрити лабораторію для редагування.");
+  }
 }
 
-function renderLabCards(filteredLabs = []) {
+
+async function renderLabCards(filteredLabs = null) {
   const container = document.getElementById("labCardsContainer");
   if (!container) {
     console.warn("⚠️ labCardsContainer не знайдено в DOM");
     return;
   }
-  container.innerHTML = '';
+  container.innerHTML = "⏳ Завантаження лабораторій...";
 
-  // Панель фільтрів
-  const filterBar = document.createElement("div");
-  filterBar.className = "filter-bar";
+  try {
+    // Якщо не передали масив — тягнемо всі лабораторії з бекенду
+    let labs = filteredLabs;
+    if (!labs) {
+      const res = await fetch("https://nodejs-production-7176.up.railway.app/labcards");
+      labs = await res.json();
+    }
 
-  filterBar.innerHTML = `
-    <label>📍 Регіон:
-      <select id="regionFilter"><option value="">Усі</option></select>
-    </label>
-    <label>👤 Менеджер:
-      <select id="managerFilter"><option value="">Усі</option></select>
-    </label>
-    <label>📄 КП:
-      <select id="kpFilter"><option value="">Усі</option></select>
-    </label>
-  `;
+    container.innerHTML = "";
 
-  // додавання опцій через JS (з перевірками)
-  if (uniqueValues?.region) {
-    [...uniqueValues.region].forEach(r => {
-      const opt = document.createElement("option");
-      opt.value = r;
-      opt.textContent = r;
-      filterBar.querySelector("#regionFilter").appendChild(opt);
-    });
-  }
-
-  if (uniqueValues?.manager) {
-    [...uniqueValues.manager].forEach(m => {
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.textContent = m;
-      filterBar.querySelector("#managerFilter").appendChild(opt);
-    });
-  }
-
-  if (uniqueValues?.kp) {
-    [...uniqueValues.kp].forEach(k => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = k;
-      filterBar.querySelector("#kpFilter").appendChild(opt);
-    });
-  }
-
-  container.appendChild(filterBar);
-
-  document.getElementById("regionFilter").addEventListener("change", applyFilters);
-  document.getElementById("managerFilter").addEventListener("change", applyFilters);
-  document.getElementById("kpFilter").addEventListener("change", applyFilters);
-
-  if (!Array.isArray(filteredLabs) || filteredLabs.length === 0) {
-    container.innerHTML += "<p>⚠️ Нічого не знайдено за заданими фільтрами.</p>";
-    return;
-  }
-
-  // Картки
-  filteredLabs.forEach((lab, index) => {
-    const div = document.createElement("div");
-    div.className = "lab-card";
-
-    const devicesHtml = Array.isArray(lab.devices)
-      ? lab.devices.map(d => `
-        <li>
-          🔧 <strong>${d.device}</strong><br>
-          📅 Продано: ${d.soldDate || "—"}<br>
-          🛠️ Сервіс: ${d.lastService || "—"}<br>
-          📄 КП: ${d.kp || "—"}<br>
-          🔧 Замінені деталі: ${d.replacedParts || "—"}
-        </li>
-      `).join("")
-      : "";
-
-    const tasksHtml = Array.isArray(lab.tasks) && lab.tasks.length
-      ? `
-        <h4>🗓️ Прев’ю задач:</h4>
-        <ul class="task-list">
-          ${lab.tasks.map(task => {
-            const dateStr = task.date || "—";
-            if (dateStr === "НІКОЛИ" || dateStr === "—") {
-              return `<li><strong>—</strong>: ${task.title}</li>`;
-            }
-
-            const taskDate = new Date(dateStr);
-            if (isNaN(taskDate)) {
-              return `<li><strong>—</strong>: ${task.title}</li>`;
-            }
-
-            const today = new Date();
-            const urgentThreshold = new Date();
-            urgentThreshold.setDate(today.getDate() + 7);
-
-            let priorityClass = "priority-green";
-            if (taskDate < today) priorityClass = "priority-red";
-            else if (taskDate <= urgentThreshold) priorityClass = "priority-yellow";
-
-            const subtasks = Array.isArray(task.tasks)
-              ? task.tasks.map(sub => `<li>${sub.priority} ${sub.action} (${sub.device})</li>`).join("")
-              : "";
-
-            return `
-              <li class="${priorityClass}">
-                <strong>${dateStr}</strong>: ${task.title}
-                ${subtasks ? `<ul>${subtasks}</ul>` : ""}
-              </li>
-            `;
-          }).join("")}
-        </ul>
-      `
-      : "";
-
-    div.innerHTML = `
-      <details>
-        <summary>
-          <h3>${index + 1}. ${lab.partner || "—"}</h3>
-          <p>📍 ${lab.region || "—"}, ${lab.city || "—"}</p>
-        </summary>
-        <div class="lab-actions">
-          <button class="edit-btn">✏️ Редагувати</button>
-          <button class="delete-btn">🗑️ Видалити</button>
-          <button class="visit-btn">📅 Запланувати візит</button>
-        </div>
-        <p>🏥 ${lab.institution || "—"}</p>
-        <p>📫 Адреса: ${lab.address || "—"}</p>
-        <p>🤝 Контактна особа: ${lab.contractor || "—"}</p>
-        <p>📞 Телефон: ${lab.phone || "—"}</p>
-        <p>🆔 ЄДРПОУ: ${lab.edrpou || "—"}</p>
-        <p>👤 Менеджер: ${lab.manager || "—"}</p>
-        <ul>${devicesHtml}</ul>
-        ${tasksHtml}
-      </details>
+    // Панель фільтрів
+    const filterBar = document.createElement("div");
+    filterBar.className = "filter-bar";
+    filterBar.innerHTML = `
+      <label>📍 Регіон:
+        <select id="regionFilter"><option value="">Усі</option></select>
+      </label>
+      <label>👤 Менеджер:
+        <select id="managerFilter"><option value="">Усі</option></select>
+      </label>
+      <label>📄 КП:
+        <select id="kpFilter"><option value="">Усі</option></select>
+      </label>
     `;
+    container.appendChild(filterBar);
 
-    container.appendChild(div);
+    // Заповнення опцій фільтрів
+    if (uniqueValues?.region) {
+      [...uniqueValues.region].forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r;
+        opt.textContent = r;
+        filterBar.querySelector("#regionFilter").appendChild(opt);
+      });
+    }
+    if (uniqueValues?.manager) {
+      [...uniqueValues.manager].forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        filterBar.querySelector("#managerFilter").appendChild(opt);
+      });
+    }
+    if (uniqueValues?.kp) {
+      [...uniqueValues.kp].forEach(k => {
+        const opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = k;
+        filterBar.querySelector("#kpFilter").appendChild(opt);
+      });
+    }
 
-    div.querySelector(".edit-btn").addEventListener("click", () => editLabCard(index));
-    div.querySelector(".delete-btn").addEventListener("click", () => deleteLab(index));
-    div.querySelector(".visit-btn").addEventListener("click", () => manualVisit(index));
-  });
+    document.getElementById("regionFilter").addEventListener("change", applyFilters);
+    document.getElementById("managerFilter").addEventListener("change", applyFilters);
+    document.getElementById("kpFilter").addEventListener("change", applyFilters);
 
-  // Перейти до календаря
-  const calendarBtn = document.createElement("div");
-  calendarBtn.className = "calendar-btn";
-  calendarBtn.innerHTML = `<a href="../calendar/calendar.html"><button>📅 Перейти до календаря задач</button></a>`;
-  container.appendChild(calendarBtn);
+    if (!Array.isArray(labs) || labs.length === 0) {
+      container.innerHTML += "<p>⚠️ Лабораторій не знайдено.</p>";
+      return;
+    }
+
+    // Картки
+    labs.forEach((lab, index) => {
+      const div = document.createElement("div");
+      div.className = "lab-card";
+
+      const devicesHtml = Array.isArray(lab.devices)
+        ? lab.devices.map(d => `
+          <li>
+            🔧 <strong>${d.device}</strong><br>
+            📅 Продано: ${d.soldDate || "—"}<br>
+            🛠️ Сервіс: ${d.lastService || "—"}<br>
+            📄 КП: ${d.kp || "—"}<br>
+            🔧 Замінені деталі: ${d.replacedParts || "—"}
+          </li>
+        `).join("")
+        : "";
+
+      const tasksHtml = Array.isArray(lab.tasks) && lab.tasks.length
+        ? `
+          <h4>🗓️ Прев’ю задач:</h4>
+          <ul class="task-list">
+            ${lab.tasks.map(task => {
+              const dateStr = task.date || "—";
+              const taskDate = new Date(dateStr);
+              const today = new Date();
+              const urgentThreshold = new Date();
+              urgentThreshold.setDate(today.getDate() + 7);
+
+              let priorityClass = "priority-green";
+              if (taskDate < today) priorityClass = "priority-red";
+              else if (taskDate <= urgentThreshold) priorityClass = "priority-yellow";
+
+              const subtasks = Array.isArray(task.tasks)
+                ? task.tasks.map(sub => `<li>${sub.priority} ${sub.action} (${sub.device})</li>`).join("")
+                : "";
+
+              return `
+                <li class="${priorityClass}">
+                  <strong>${dateStr}</strong>: ${task.title}
+                  ${subtasks ? `<ul>${subtasks}</ul>` : ""}
+                </li>
+              `;
+            }).join("")}
+          </ul>
+        `
+        : "";
+
+      div.innerHTML = `
+        <details>
+          <summary>
+            <h3>${index + 1}. ${lab.partner || "—"}</h3>
+            <p>📍 ${lab.region || "—"}, ${lab.city || "—"}</p>
+          </summary>
+          <div class="lab-actions">
+            <button onclick="editLabCard('${lab.id}')">✏️ Редагувати</button>
+            <button onclick="deleteLab('${lab.id}')">🗑️ Видалити</button>
+            <button onclick="planVisit('${lab.id}')">📅 Запланувати візит</button>
+          </div>
+          <p>🏥 ${lab.institution || "—"}</p>
+          <p>📫 Адреса: ${lab.address || "—"}</p>
+          <p>🤝 Контактна особа: ${lab.contractor || "—"}</p>
+          <p>📞 Телефон: ${lab.phone || "—"}</p>
+          <p>🆔 ЄДРПОУ: ${lab.edrpou || "—"}</p>
+          <p>👤 Менеджер: ${lab.manager || "—"}</p>
+          <ul>${devicesHtml}</ul>
+          ${tasksHtml}
+        </details>
+      `;
+
+      container.appendChild(div);
+    });
+
+    // Кнопка переходу до календаря
+    const calendarBtn = document.createElement("div");
+    calendarBtn.className = "calendar-btn";
+    calendarBtn.innerHTML = `<a href="../calendar/calendar.html"><button>📅 Перейти до календаря задач</button></a>`;
+    container.appendChild(calendarBtn);
+
+  } catch (err) {
+    console.error("❌ Помилка завантаження лабораторій:", err);
+    container.innerHTML = "<p>⚠️ Не вдалося завантажити лабораторії з бекенду.</p>";
+  }
 }
-
-
-function manualVisit(index) {
-  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
-  const lab = labCards[index];
-  if (!lab) return;
-
-  const date = prompt(`📅 Вкажіть дату візиту для ${lab.partner} (${lab.city}) у форматі YYYY-MM-DD:`);
-  if (!date) return;
-
-  const parsed = new Date(date);
-  if (isNaN(parsed)) {
-    alert("❌ Невірний формат дати. Використовуйте YYYY-MM-DD.");
+async function renderTasksPreview(labId) {
+  const container = document.getElementById("tasksPreviewContainer");
+  if (!container) {
+    console.warn("⚠️ tasksPreviewContainer не знайдено в DOM");
     return;
   }
+  container.innerHTML = "⏳ Завантаження задач...";
 
-  const dateStr = toISODateLocal(parsed);
+  try {
+    // 🔧 Тягнемо задачі з бекенду
+    const res = await fetch(`https://nodejs-production-7176.up.railway.app/tasks/byLab/${labId}`);
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити задачі");
+    }
+    const tasks = await res.json();
 
-  const visit = {
-    id: `${lab.id}_${Date.now()}`,
-    labId: lab.id,
-    labName: lab.partner,
-    date: dateStr,
-    tasks: [],
-    status: "заплановано"
-  };
+    container.innerHTML = "";
 
-  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-  visits.push(visit);
-  localStorage.setItem("visits", JSON.stringify(visits));
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      container.innerHTML = "<p>⚠️ Задач для цієї лабораторії не знайдено.</p>";
+      return;
+    }
 
-  alert(`✅ Візит до ${lab.partner} (${lab.city}) заплановано на ${dateStr}`);
+    // 🔧 Сортуємо задачі за датою
+    tasks.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // 🔧 Малюємо список задач
+    const list = document.createElement("ul");
+    list.className = "task-list";
+
+    tasks.forEach(t => {
+      const dateStr = t.date || "—";
+      const taskType = t.taskType === "service" ? "🔧 Сервіс" : "🧪 Реагенти";
+      const reagentInfo = t.taskType === "reagents"
+        ? `<br>Реагент: ${t.reagentName}, кількість: ${t.neededQuantity}`
+        : "";
+
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <strong>${dateStr}</strong> — ${taskType} для <em>${t.device}</em><br>
+        ${t.title || ""}${reagentInfo}
+      `;
+      list.appendChild(li);
+    });
+
+    container.appendChild(list);
+
+  } catch (err) {
+    console.error("❌ Помилка при рендері задач:", err);
+    container.innerHTML = "<p>⚠️ Не вдалося завантажити задачі з бекенду.</p>";
+  }
 }
+
+
+async function manualVisit(labId) {
+  try {
+    // 🔧 Тягнемо дані лабораторії з бекенду
+    const res = await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`);
+    if (!res.ok) {
+      throw new Error("Не вдалося знайти лабораторію");
+    }
+    const lab = await res.json();
+
+    // 🔧 Запитуємо дату у користувача
+    const date = prompt(`📅 Вкажіть дату візиту для ${lab.partner} (${lab.city}) у форматі YYYY-MM-DD:`);
+    if (!date) return;
+
+    const parsed = new Date(date);
+    if (isNaN(parsed)) {
+      alert("❌ Невірний формат дати. Використовуйте YYYY-MM-DD.");
+      return;
+    }
+
+    const dateStr = toISODateLocal(parsed);
+
+    // 🔧 Формуємо новий візит
+    const visit = {
+      id: `${lab.id}_${Date.now()}`,
+      labId: lab.id,
+      labName: lab.partner,
+      date: dateStr,
+      tasks: [], // можна додати generateDeviceTasksWithDueDates(lab)
+      status: "заплановано"
+    };
+
+    // 🔧 Відправляємо у бекенд Railway
+    await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(visit)
+    });
+
+    alert(`✅ Візит до ${lab.partner} (${lab.city}) заплановано на ${dateStr}`);
+
+    // 🔧 Перерендеримо список лабораторій
+    renderLabCards();
+
+  } catch (err) {
+    console.error("❌ Помилка при плануванні візиту:", err);
+    alert("⚠️ Не вдалося запланувати візит. Перевірте консоль.");
+  }
+}
+
 
 function applyFilters() {
   const labCards = JSON.parse(localStorage.getItem("labCards") || "[]"); // ✅ беремо з LocalStorage
@@ -1176,116 +1443,333 @@ function applyFilters() {
   renderLabCards(filtered);
 }
 
-function resetFilters() {
-  // очищаємо всі поля фільтрів
-  document.getElementById("filterName").value = "";
-  document.getElementById("filterRegion").value = "";
-  document.getElementById("filterCity").value = "";
-  document.getElementById("filterInstitution").value = "";
-  document.getElementById("filterDevice").value = "";
-  document.getElementById("filterContractor").value = "";
-  document.getElementById("filterPhone").value = "";
-  document.getElementById("filterEdrpou").value = "";
-  document.getElementById("filterManager").value = "";
-  document.getElementById("kpFilter").value = ""; // ✅ очищаємо КП
+async function resetFilters() {
+  try {
+    // 🔧 очищаємо всі поля фільтрів
+    document.getElementById("filterName").value = "";
+    document.getElementById("filterRegion").value = "";
+    document.getElementById("filterCity").value = "";
+    document.getElementById("filterInstitution").value = "";
+    document.getElementById("filterDevice").value = "";
+    document.getElementById("filterContractor").value = "";
+    document.getElementById("filterPhone").value = "";
+    document.getElementById("filterEdrpou").value = "";
+    document.getElementById("filterManager").value = "";
+    document.getElementById("kpFilter").value = "";
 
-  // отримуємо всі картки з localStorage
-  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
+    // 🔧 тягнемо всі лабораторії з бекенду Railway
+    const res = await fetch("https://nodejs-production-7176.up.railway.app/labcards");
+    if (!res.ok) {
+      throw new Error("Не вдалося завантажити лабораторії");
+    }
+    const labs = await res.json();
 
-  // рендеримо повний список
-  renderLabCards(labCards);
+    // 🔧 рендеримо повний список
+    renderLabCards(labs);
+
+  } catch (err) {
+    console.error("❌ Помилка при скиданні фільтрів:", err);
+    alert("⚠️ Не вдалося відновити список лабораторій. Перевірте консоль.");
+  }
 }
 
-function showTaskPreviewBeforeSave(labCard, visits, onConfirm) {
-  const modal = document.createElement("div");
-  modal.className = "modal";
-  modal.style.cssText = `
-    position: fixed;
-    top: 20%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 20px;
-    z-index: 1000;
-    max-width: 600px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  `;
 
-  const visitItems = visits.map(v => {
-    const subtasks = v.tasks?.map(sub =>
-      `<li>${sub.priority || ""} ${sub.action || ""} (${sub.device || ""})</li>`
-    ).join("") || "<li>Немає задач</li>";
+async function showTaskPreviewBeforeSave(labCard, onConfirm) {
+  try {
+    // 🔧 Генеруємо задачі для лабораторії (актуальні перед збереженням)
+    const tasks = await generateDeviceTasksWithDueDates(labCard);
 
-    return `
-      <li style="margin-bottom:15px;">
-        <strong>${v.date || "—"}</strong>: ${v.title || ""}
-        <ul style="margin-left:20px;">${subtasks}</ul>
-      </li>
+    // 🔧 Формуємо прев’ю
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      z-index: 1000;
+      max-width: 600px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     `;
-  }).join("");
 
-  modal.innerHTML = `
-    <h3>🗓️ Прев’ю задач для лабораторії <em>${labCard.partner}</em></h3>
-    <ul style="max-height:300px; overflow-y:auto; padding-left:20px;">
-      ${visitItems || "<li>Немає задач для відображення</li>"}
-    </ul>
-    <div style="margin-top:20px; text-align:right;">
-      <button id="confirmSaveBtn">✅ Підтвердити збереження</button>
-      <button id="cancelSaveBtn">❌ Скасувати</button>
-    </div>
-  `;
+    const taskItems = tasks.map(t => `
+      <li style="margin-bottom:10px;">
+        <strong>${t.date || "—"}</strong>: ${t.title}
+        ${t.reagentName ? `<br>🔬 Реагент: ${t.reagentName}, кількість: ${t.neededQuantity}` : ""}
+      </li>
+    `).join("");
 
-  document.body.appendChild(modal);
+    modal.innerHTML = `
+      <h3>🗓️ Прев’ю задач для лабораторії <em>${labCard.partner}</em></h3>
+      <ul style="max-height:300px; overflow-y:auto; padding-left:20px;">
+        ${taskItems || "<li>Немає задач для відображення</li>"}
+      </ul>
+      <div style="margin-top:20px; text-align:right;">
+        <button id="confirmSaveBtn">✅ Підтвердити збереження</button>
+        <button id="cancelSaveBtn">❌ Скасувати</button>
+      </div>
+    `;
 
-  // Обробка підтвердження
-  document.getElementById("confirmSaveBtn").addEventListener("click", () => {
-    modal.remove();
-    onConfirm();
-  });
+    document.body.appendChild(modal);
 
-  // Обробка скасування
-  document.getElementById("cancelSaveBtn").addEventListener("click", () => {
-    modal.remove();
-  });
+    // 🔧 Обробка підтвердження
+    document.getElementById("confirmSaveBtn").addEventListener("click", async () => {
+      modal.remove();
+
+      try {
+        // Збереження лабораторії у бекенд
+        await fetch("https://nodejs-production-7176.up.railway.app/labcards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(labCard)
+        });
+
+        // Збереження задач як візитів у бекенд
+        const visit = {
+          id: `${labCard.id}_${Date.now()}`,
+          labId: labCard.id,
+          labName: labCard.partner,
+          date: new Date().toISOString().split("T")[0],
+          tasks,
+          status: "заплановано"
+        };
+
+        await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(visit)
+        });
+
+        alert("✅ Лабораторію та задачі збережено у бекенд!");
+        if (typeof onConfirm === "function") onConfirm();
+
+      } catch (err) {
+        console.error("❌ Помилка при збереженні:", err);
+        alert("⚠️ Не вдалося зберегти лабораторію. Перевірте консоль.");
+      }
+    });
+
+    // 🔧 Обробка скасування
+    document.getElementById("cancelSaveBtn").addEventListener("click", () => {
+      modal.remove();
+    });
+
+  } catch (err) {
+    console.error("❌ Помилка при генерації прев’ю задач:", err);
+    alert("⚠️ Не вдалося згенерувати прев’ю задач.");
+  }
 }
+
 
 async function planVisit(labId) {
-  const selectedDate = sessionStorage.getItem("selectedDate");
-  if (!selectedDate) {
-    alert("⚠️ Спочатку виберіть дату у календарі.");
-    return;
+  try {
+    const selectedDate = sessionStorage.getItem("selectedDate");
+    if (!selectedDate) {
+      alert("⚠️ Спочатку виберіть дату у календарі.");
+      return;
+    }
+
+    // 🔧 Тягнемо лабораторію з бекенду
+    const res = await fetch(`https://nodejs-production-7176.up.railway.app/labcards/${labId}`);
+    if (!res.ok) {
+      throw new Error("Не вдалося знайти лабораторію");
+    }
+    const lab = await res.json();
+
+    // 🔧 Генеруємо задачі для цього візиту
+    const tasks = await generateDeviceTasksWithDueDates(lab);
+
+    // 🔧 Формуємо новий візит
+    const newVisit = {
+      id: `${labId}_${Date.now()}`,
+      labId: labId,
+      labName: lab.partner,
+      date: selectedDate,
+      tasks,
+      status: "заплановано"
+    };
+
+    // 🔧 Відправляємо у бекенд Railway
+    await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newVisit)
+    });
+
+    alert("✅ Візит заплановано!");
+
+    // 🔧 Перенаправлення у календар
+    setTimeout(() => {
+      window.location.href = "../calendar/calendar.html";
+    }, 500);
+
+  } catch (err) {
+    console.error("❌ Помилка при плануванні візиту:", err);
+    alert("⚠️ Не вдалося запланувати візит. Перевірте консоль.");
   }
-
-  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
-  const lab = labCards.find(l => l.id === labId);
-  if (!lab) return;
-
-  // задачі для цього візиту
-  const tasks = await generateDeviceTasksWithDueDates(lab);
-
-  const newVisit = {
-    id: `${labId}_${Date.now()}`,
-    labId: labId,
-    labName: lab.partner,
-    date: selectedDate,
-    tasks,
-    status: "заплановано"
-  };
-
-  let visits = JSON.parse(localStorage.getItem("visits") || "[]");
-  visits.push(newVisit);
-  localStorage.setItem("visits", JSON.stringify(visits));
-
-  alert("✅ Візит заплановано!");
-
-  // Перенаправлення робимо асинхронно, щоб не блокувати
-  setTimeout(() => {
-    window.location.href = "../calendar/calendar.html";
-  }, 500);
 }
 
+
+async function saveLabCardToBackend(labCard, visits) {
+  await fetch("https://nodejs-production-7176.up.railway.app/labcards", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(labCard)
+  });
+
+  await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(visits)
+  });
+}
+async function loadLabCards() {
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/labcards");
+  const labs = await res.json();
+  renderLabCards(labs);
+}
+// 🔧 Рендер полів для аналізів LS-1100
+function renderAnalysisFields(container, index, prefill = {}) {
+  const config = calculators["ls1100"];
+  if (!config || !config.analyses) return;
+  Object.keys(config.analyses).forEach(itemName => {
+    const safeId = itemName.replace(/[^a-zA-Z0-9]/g, "_");
+    const block = document.createElement("div");
+    block.className = "analysis-block";
+    block.innerHTML = `
+      <h4>Аналіз: ${itemName}</h4>
+      <label>Щоденний обсяг тестів:
+        <input type="number" id="analysisCount_${index}_${safeId}" min="0" value="${prefill[itemName]?.count || 0}">
+      </label>  
+      <label>Кількість упаковок:
+        <input type="number" id="analysisPackages_${index}_${safeId}" min="0" value="${prefill[itemName]?.packages || 0}">
+      </label>  
+      <label>Дата останнього замовлення:
+        <input type="date" id="analysisDate_${index}_${safeId}" value="${prefill[itemName]?.date || ''}">
+      </label>
+      <div id="analysisCalc_${index}_${safeId}" class="analysis-calc">⏳ Вистачить приблизно на <strong>0</strong> днів</div>
+      <hr>
+    `;
+    container.appendChild(block);
+    const countEl = document.getElementById(`analysisCount_${index}_${safeId}`);
+    const packagesEl = document.getElementById(`analysisPackages_${index}_${safeId}`);
+    const calcEl = document.getElementById(`analysisCalc_${index}_${safeId}`);  
+    function recalc() {
+      const count = countEl ? parseInt(countEl.value || "0", 10) : 0;
+      const packages = packagesEl ? parseInt(packagesEl.value || "0", 10) : 0;  
+      let testsPerPackage = 25; // значення за замовчуванням
+      if (config.analyses[itemName] && config.analyses[itemName].testsPerPackage) {
+        testsPerPackage = config.analyses[itemName].testsPerPackage;
+      }
+      const totalTests = packages * testsPerPackage;
+      const daysAvailable = count > 0 ? Math.floor(totalTests / count) : "∞";
+      calcEl.innerHTML = `⏳ Вистачить приблизно на <strong>${daysAvailable}</strong> днів`;
+    }
+    countEl.addEventListener("input", recalc);
+    packagesEl.addEventListener("input", recalc);
+    recalc();
+  });
+}
+  // 🔧 Рендер полів для реагентів
+function renderReagentFields(container, index, prefill = {}) {
+  const deviceSelect = document.getElementById(`device_${index}`);
+  if (!deviceSelect) return;
+  const deviceName = deviceSelect.value;
+  const configKey = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const config = calculators[configKey];
+  if (!config || !config.reagents) return;
+  config.reagents.forEach(r => {
+    const safeId = r.name.replace(/[^a-zA-Z0-9]/g, "_");  
+    const block = document.createElement("div");
+    block.className = "reagent-block";
+    block.innerHTML = `
+      <h4>Реагент: ${r.name}</h4>
+      <label>Останнє замовлення (упаковок):
+        <input type="number" id="reagentCount_${index}_${safeId}" min="0" value="${prefill[r.name]?.lastOrderCount || 0}">  
+      </label>
+      <label>Дата останнього замовлення:  
+        <input type="date" id="reagentDate_${index}_${safeId}" value="${prefill[r.name]?.lastOrderDate || ''}">
+      </label>
+      <hr>
+    `;
+    container.appendChild(block);
+  });
+}
+// 🔧 Рендер поля для щоденного обсягу тестів
+function renderTestCountField(container, index, prefill = 0) {
+  const block = document.createElement("div");
+  block.className = "test-count-block";
+  block.innerHTML = `
+    <label>Щоденний обсяг тестів:
+      <input type="number" id="testCount_${index}" min="0" value="${prefill}">
+    </label>
+    <hr>
+  `;
+  container.appendChild(block);
+}
+async function generateDeviceTasksWithDueDates(lab) {
+  const tasks = [];
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setMonth(endDate.getMonth() + 3); // наступні 3 місяці        
+  for (const device of lab.devices) {
+    const deviceName = device.device;
+    const configKey = deviceName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const config = calculators[configKey];
+    if (!config) continue;
+    // Сервісне обслуговування
+    if (config.serviceIntervalMonths && device.lastService) {
+      const lastServiceDate = new Date(device.lastService); 
+      if (lastServiceDate instanceof Date && !isNaN(lastServiceDate)) {
+        const nextServiceDate = new Date(lastServiceDate);
+        nextServiceDate.setMonth(nextServiceDate.getMonth() + config.serviceIntervalMonths);
+        const dueStr = toISODateLocal(nextServiceDate);
+        tasks.push({
+          type: "service",
+          device: deviceName,
+          taskType: "service",
+          title: `Сервісне обслуговування ${deviceName}`,
+          date: dueStr,
+          priority: "🟢" ,  
+          source: "auto"
+        });
+      }
+    }
+    // Реагенти
+    if (config.reagents && Array.isArray(config.reagents)) {  
+      for (const r of config.reagents) {
+        const reagentInfo = device.reagentsInfo ? device.reagentsInfo[r.name] : null;
+        if (reagentInfo && reagentInfo.postponed) continue;
+        let lastOrderDate = reagentInfo && reagentInfo.lastOrderDate ? new Date(reagentInfo.lastOrderDate) : null;
+        if (!lastOrderDate || isNaN(lastOrderDate)) {
+          lastOrderDate = new Date(); 
+          lastOrderDate.setDate(lastOrderDate.getDate() - r.defaultLeadTimeDays); 
+        }
+        const nextOrderDate = new Date(lastOrderDate);
+        nextOrderDate.setDate(nextOrderDate.getDate() + r.defaultLeadTimeDays);
+        if (nextOrderDate > endDate) continue; 
+        const dueStr = toISODateLocal(nextOrderDate);
+        tasks.push({
+          type: "reagents",
+          device: deviceName,
+          taskType: "reagents", 
+          reagentName: r.name,
+          neededQuantity: r.defaultOrderQuantity,
+          title: `Замовити реагент ${r.name} для ${deviceName}`,
+          date: dueStr,
+          priority: "⚠️",
+          source: "auto"
+        });
+      }
+
+    }
+  } 
+  return tasks;
+}
 // Глобальні прив’язки
 window.onRegionInput = onRegionInput;
 window.onCityInput = onCityInput;
@@ -1311,3 +1795,9 @@ window.renderAnalysisFields = renderAnalysisFields;
 window.renderReagentFields = renderReagentFields;
 window.renderTestCountField = renderTestCountField;
 window.kpListByDevice = kpListByDevice;
+window.saveLabCardToBackend = saveLabCardToBackend;
+window.loadLabCards = loadLabCards;
+window.toISODateLocal = toISODateLocal;
+window.nextWorkingDay = nextWorkingDay;
+window.preferTueThu = preferTueThu; 
+window.renderVisitPlanner = renderVisitPlanner;

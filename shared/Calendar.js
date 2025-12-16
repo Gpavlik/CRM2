@@ -33,25 +33,34 @@ function filterByStatus(status) {
     }
 
     function showVisitMenu(visit) {
-      currentVisitId = visit.id;
-      document.getElementById("visitMenuInfo").innerHTML = `
-        <p><strong>${visit.labName}</strong></p>
-        <p>Дата: ${visit.date}</p>
-        <p>Статус: ${visit.status || "заплановано"}</p>
-        ${
-          visit.devices
-            ? `<p>Завдання:</p><ul>${
-                visit.devices.map(d => `<li>${d.deviceName}: ${(d.reagents||[]).map(r => r.name).join(", ")}</li>`).join("")
-              }</ul>`
-            : (visit.tasks
-                ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>`
-                : ""
-              )
-        }
-      `;
-      document.getElementById("visitMenu").classList.add("show");
-    }
+  currentVisitId = visit.id;
+
+  document.getElementById("visitMenuInfo").innerHTML = `
+    <p><strong>${visit.labName}</strong></p>
+    <p>Дата: ${visit.date}</p>
+    <p>Статус: ${visit.status || "заплановано"}</p>
+    ${visit.tasks ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>` : ""}
+  `;
+
+  // Bind actions to the selected visit
+  document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
+  document.querySelector("#visitMenu .btn-cancel").onclick = () => { onCancelVisit(); };
+  document.querySelector("#visitMenu .btn-reschedule").onclick = () => rescheduleVisit(currentVisitId);
+  document.querySelector("#visitMenu .btn-edit").onclick = () => editLabCard(visit.labId);
+
+  document.getElementById("visitMenu").classList.add("show");
+}
+
 function hideVisitMenu() { document.getElementById("visitMenu").classList.remove("show"); }
+
+function parseReagentAction(action) {
+  // Очікуваний формат: "Замов реагент — DIL-E (6 уп.)"
+  const match = action.match(/Замов реагент — ([^(]+)\((\d+)/);
+  if (match) {
+    return { name: match[1].trim(), neededQuantity: parseInt(match[2]) };
+  }
+  return { name: action, neededQuantity: 0 };
+}
 
 function onStartVisit() {
   const visits = loadVisits();
@@ -72,7 +81,7 @@ function onStartVisit() {
 
   (lab.devices || []).forEach((device, idx) => {
     const reagentsFromVisit = (v.tasks || [])
-      .filter(t => t.device === device.device && t.taskType === "reagents");
+      .filter(t => t.device === device.device && t.action.startsWith("Замов реагент"));
 
     buttonsHtml += `<button onclick="openTab(${idx})" id="tabBtn_${idx}">${device.device}</button>`;
     contentsHtml += `
@@ -90,11 +99,12 @@ function onStartVisit() {
             <th>Факт дата</th>
           </tr>
           ${reagentsFromVisit.map((t, j) => {
-            const info = device.reagentsInfo?.[t.reagentName] || {};
+            const parsed = parseReagentAction(t.action);
+            const info = device.reagentsInfo?.[parsed.name] || {};
             return `
               <tr>
-                <td>${t.reagentName} — ${t.date}</td>
-                <td><input type="number" id="agreement_${idx}_${j}" value="${t.neededQuantity || 0}"></td>
+                <td>${parsed.name} — ${v.date} (потреба: ${parsed.neededQuantity})</td>
+                <td><input type="number" id="agreement_${idx}_${j}" value="${parsed.neededQuantity}"></td>
                 <td><input type="number" id="factQty_${idx}_${j}" value="${info.lastOrderCount || 0}"></td>
                 <td><input type="date" id="factDate_${idx}_${j}" value="${info.lastOrderDate || ""}"></td>
               </tr>
@@ -108,7 +118,7 @@ function onStartVisit() {
           <tr>
             <td>План</td>
             <td><input type="text" id="servicePlanType_${idx}" value="${device.workType || ''}"></td>
-            <td><input type="date" id="servicePlanDate_${idx}" value="${(v.tasks.find(t => t.device === device.device && t.taskType === 'service')?.date) || ''}"></td>
+            <td><input type="date" id="servicePlanDate_${idx}" value="${(v.tasks.find(t => t.device === device.device && t.action === 'Сервіс')?.date) || ''}"></td>
           </tr>
           <tr>
             <td>Домовленість</td>
@@ -130,11 +140,10 @@ function onStartVisit() {
   openTab(0);
 }
 
-
 function openTab(idx) {
   const tab = document.getElementById(`tab_${idx}`);
   const btn = document.getElementById(`tabBtn_${idx}`);
-  if (!tab || !btn) return; // якщо вкладки немає — нічого не робимо
+  if (!tab || !btn) return;
 
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".tab-buttons button").forEach(el => el.classList.remove("active"));
@@ -142,6 +151,13 @@ function openTab(idx) {
   btn.classList.add("active");
 }
 
+function editLabCard(labId) {
+  // зберігаємо ID лабораторії у localStorage або sessionStorage
+  localStorage.setItem("currentLabId", labId);
+
+  // переходимо на сторінку labCard.html
+  window.location.href = "/labcards/labcard.html";
+}
 function submitVisitData() {
   const labCards = loadLabCards();
   const lab = labCards.find(l => l.id === currentLabId);
@@ -244,10 +260,7 @@ function confirmStartVisit() {
 }
 function onCancelVisit() { cancelVisit(currentVisitId); hideVisitMenu(); rerenderCalendar(); }
 function onRescheduleVisit() {
-  const newDate = prompt("Нова дата (YYYY-MM-DD):");
-  if (!newDate) return;
-  rescheduleVisit(currentVisitId, newDate);
-  hideVisitMenu(); rerenderCalendar();
+ rescheduleVisit(currentVisitId);
 }
 function onEditLabCard() {
   const visits = loadVisits();
@@ -285,3 +298,52 @@ document.addEventListener("DOMContentLoaded", () => {
       window.onEditLabCard = onEditLabCard;
       window.rerenderCalendar = rerenderCalendar;
 });
+function rescheduleVisit(visitId) {
+  // Remove existing modal if any
+  const existing = document.getElementById("rescheduleModal");
+  if (existing) existing.remove();
+
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const modalHtml = `
+    <div id="rescheduleModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeRescheduleModal()">&times;</span>
+        <h3>Перенесення візиту</h3>
+        <label>Оберіть нову дату:
+          <input type="date" id="newVisitDate" value="${v.date}">
+        </label>
+        <div class="modal-actions" style="margin-top:12px;text-align:right;">
+          <button onclick="confirmReschedule('${visitId}')">✅ Зберегти</button>
+          <button onclick="closeRescheduleModal()">❌ Скасувати</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  document.getElementById("rescheduleModal").style.display = "block";
+}
+
+function confirmReschedule(visitId) {
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const newDate = document.getElementById("newVisitDate").value;
+  if (!newDate) return;
+
+  v.date = newDate;
+  v.status = "перенесено"; // mark rescheduled
+  saveVisits(visits);
+
+  closeRescheduleModal();
+  hideVisitMenu();
+  rerenderCalendar();
+}
+
+function closeRescheduleModal() {
+  const modal = document.getElementById("rescheduleModal");
+  if (modal) modal.remove();
+}
