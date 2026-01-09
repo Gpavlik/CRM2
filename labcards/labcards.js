@@ -63,12 +63,20 @@ async function loadLabCards() {
     if (!labsCache || labsCache.length === 0) {
       await loadLabsCache();
     }
-    renderLabCards(labsCache);
+
+    // ✅ Фільтруємо лише ті лабораторії, що мають прилади або реагенти
+    const filteredLabs = labsCache.filter(lab =>
+      (lab.devices && lab.devices.length > 0) ||
+      (lab.reagents && lab.reagents.length > 0) // якщо є поле reagents
+    );
+
+    renderLabCards(filteredLabs);
   } catch (err) {
     console.error("❌ Помилка при відображенні лабораторій:", err);
   }
 }
 
+document.addEventListener("DOMContentLoaded", async () => { await loadLabsCache(); });
 // ==========================
 // Фільтрація лабораторій
 // ==========================
