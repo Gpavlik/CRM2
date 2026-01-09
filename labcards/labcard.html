@@ -1,180 +1,149 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <link rel="icon" href="data:,">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧪 Лабораторна картка</title>
+  <title>Картка лабораторії</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
-    input, select { width: 100%; padding: 8px; margin-top: 5px; }
-    .device-block { background: #fff; padding: 10px; margin: 10px 0; border-left: 4px solid #0077cc; border-radius: 5px; }
-    button { margin-top: 15px; padding: 10px 15px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    button:hover { background: #005fa3; }
-    .priority-red {
-  color: #d00;
-  font-weight: bold;
+    body {
+  font-family: Arial, sans-serif;
+  margin: 0; padding: 0;
+  background: linear-gradient(135deg, #006400, #004d00);
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-.priority-yellow {
-  color: #e67e00;
+h1 { margin-top: 30px; }
+form {
+  max-width: 1000px;
+  width: 95%;
+  margin: 20px auto;
+  padding: 20px;
+  background: #008000;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
 }
-.priority-green {
-  color: #007f00;
-}
-.device-block {
-  border: 1px solid #ddd;
-  padding: 12px;
-  margin-bottom: 15px;
-  border-radius: 6px;
-  background: #dadada;
-}
-
-.device-block label {
+form label {
   display: block;
-  margin-top: 8px;
-  font-weight: 500;
+  margin: 12px 0;
 }
-
-.device-selects {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.device-selects select {
-  flex: 1;
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  font-size: 14px;
-}
-.analysis-block label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-}
-.analysis-block input {
-  margin-top: 2px;
-}
-.analysis-inputs {
-  display: flex;
-  gap: 20px;
-  margin-top: 8px;
-}
-
-.analysis-inputs label {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-}
-
-.analysis-inputs input {
-  margin-top: 4px;
-  padding: 4px;
+input, select {
   width: 100%;
-  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
 }
-.analysis-calc {
-  margin-top: 6px;
-  font-size: 13px;
-  color: #333;
+.form-actions {
+  margin-top: 20px;
 }
-.hidden {
-  display: none;
+.form-actions button {
+  margin-right: 10px;
+  background: #006400;
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+.form-actions button:hover {
+  background: #003300;
+}
+.device-block, #taskPreviewSection {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #fff;
+  border-radius: 6px;
+  color: #000;
 }
   </style>
+  <script src="labcards.js" defer></script>
+  <script src="logistics.js" defer></script>
 </head>
 <body>
-  <h2>🧪 Додати / Редагувати лабораторію</h2>
+  <h1>🧪 Картка лабораторії</h1>
 
-  <label for="partnerName">Контрагент:</label>
-  <input type="text" id="partnerName">
+  <form id="labForm">
+    <label>Контрагент:
+      <input type="text" id="partnerName" required>
+    </label>
 
-  <label for="region">📍 Область:</label>
-  <input type="text" id="region" list="region-list">
-  <datalist id="region-list"></datalist>
+    <label>Область:
+      <input list="regionList" id="region" onfocus="fillRegionOptions()" onchange="fillCityOptions()">
+      <datalist id="regionList"></datalist>
+    </label>
 
-  <label for="city">🏙️ Місто:</label>
-  <input type="text" id="city" list="city-list">
-  <datalist id="city-list"></datalist>
+    <label>Місто:
+      <input list="cityList" id="city" onfocus="fillCityOptions()" onchange="fillLpzOptions()">
+      <datalist id="cityList"></datalist>
+    </label>
 
-  <label for="lpz">🏥 ЛПЗ:</label>
-  <input type="text" id="lpz" list="lpz-list">
-  <datalist id="lpz-list"></datalist>
+    <label>ЛПЗ:
+      <input list="lpzList" id="lpz" onfocus="fillLpzOptions()" onchange="prefillLabData()">
+      <datalist id="lpzList"></datalist>
+    </label>
 
-  <label for="labAddress">📫 Адреса:</label>
-  <input type="text" id="labAddress">
+    <label>Адреса:
+      <input type="text" id="labAddress">
+    </label>
 
-  <label for="contractor">🤝 Контактна особа:</label>
-  <input type="text" id="contractor">
+    <label>Контрагент (юрособа):
+      <input type="text" id="contractor">
+    </label>
 
-  <label for="phone">📞 Телефон:</label>
-  <input type="text" id="phone">
+    <label>Телефон:
+      <input type="text" id="phone">
+    </label>
 
-  <label for="labEdrpou">🆔 ЄДРПОУ:</label>
-  <input type="text" id="labEdrpou" placeholder="8 цифр">
+    <label>ЄДРПОУ:
+      <input type="text" id="labEdrpou" required>
+    </label>
 
-  <label for="labManager">👤 Відповідальний менеджер:</label>
-  <input type="text" id="labManager" placeholder="ПІБ менеджера">
- <!-- спочатку прихована -->
-<div id="devicesSection" class="hidden">
-  <h3>🔧 Прилади</h3>
-  <div id="devicesContainer"></div> 
-</div>
-<button id="addDeviceBtn">➕ Додати прилад</button>
- <button id="saveLabBtn">💾 Зберегти</button>
-<script type="module" src="labcards.js"></script>
-  <script type="module">
- window.addEventListener("DOMContentLoaded", () => {
-  // 🔧 Завантаження списку ЛПЗ
-  if (typeof loadLPZList === "function") loadLPZList();
+    <label>Менеджер:
+      <input type="text" id="labManager">
+    </label>
 
-  // 🔧 Кнопка додати прилад
-  const addBtn = document.getElementById("addDeviceBtn");
-  if (addBtn) {
-    addBtn.addEventListener("click", () => {
-      const devicesSection = document.getElementById("devicesSection");
-      devicesSection.style.display = "block"; // показати блок приладів
-      if (typeof addDevice === "function") addDevice();
-    });
-  }
+    <!-- Прилади -->
+    <section id="devicesSection" style="display:none;">
+      <h2>🔧 Прилади</h2>
+      <div id="devicesContainer"></div>
+      <button type="button" onclick="addDevice()">➕ Додати прилад</button>
+    </section>
 
-  // 🔧 Кнопка зберегти лабораторію
-  const saveBtn = document.getElementById("saveLabBtn");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", () => {
-      if (typeof saveLabCard === "function") saveLabCard();
-    });
-  }
+    <!-- Прев’ю задач -->
+    <section id="taskPreviewSection">
+      <h2>📋 Прев’ю задач</h2>
+      <div id="taskPreview"></div>
+    </section>
 
-  // 🔧 Автопідказки для регіону/міста/ЛПЗ
-  document.getElementById("region")?.addEventListener("input", e => {
-    if (typeof onRegionInput === "function") onRegionInput(e);
-  });
-  document.getElementById("city")?.addEventListener("input", e => {
-    if (typeof onCityInput === "function") onCityInput(e);
-  });
-  document.getElementById("lpz")?.addEventListener("input", e => {
-    if (typeof onLPZInput === "function") onLPZInput(e);
-  });
+    <!-- Кнопки -->
+    <div class="form-actions">
+      <button type="button" onclick="showTaskPreviewBeforeSave(getLabCardFromForm(), () => saveLabCard())">💾 Зберегти</button>
+      <button type="button" onclick="updateLabCard(document.getElementById('labEdrpou').value)">🔄 Оновити</button>
+    </div>
+  </form>
 
-  // 🔧 Завантаження KP‑списку
-  fetch("../calculators/kp-list.json")
-    .then(res => res.json())
-    .then(data => {
-      data.forEach(entry => {
-        kpListByDevice[entry.device] = entry.KP;
-      });
-    })
-    .catch(err => console.warn("⚠️ Не вдалося завантажити kp-list.json", err));
+  <script>
+    // Виклик ініціалізації при завантаженні
+    //document.addEventListener("DOMContentLoaded", initLabCard);
 
-  // 🔧 Ініціалізація картки (нова або редагування)
-  if (typeof initLabCard === "function") initLabCard();
-});
-
-</script>
+    // Допоміжна функція для збору даних з форми
+    function getLabCardFromForm() {
+      return {
+        partner: document.getElementById("partnerName").value.trim(),
+        region: document.getElementById("region").value.trim(),
+        city: document.getElementById("city").value.trim(),
+        institution: document.getElementById("lpz").value.trim(),
+        address: document.getElementById("labAddress").value.trim(),
+        contractor: document.getElementById("contractor").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        edrpou: document.getElementById("labEdrpou").value.trim(),
+        manager: document.getElementById("labManager").value.trim(),
+        devices: [] // буде заповнено у JS
+      };
+    }
+  </script>
 </body>
 </html>

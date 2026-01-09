@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Список лабораторій</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background: linear-gradient(135deg, #006400, #004d00);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { margin-top: 30px; }
+    .dashboard {
+      max-width: 1200px;
+      width: 95%;
+      margin: 20px auto;
+      padding: 20px;
+      background: #008000;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+    .lab-card {
+      background: #fff;
+      color: #000;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    .lab-actions {
+      margin-top: 8px;
+    }
+    button {
+      margin: 4px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background-color: #006400;
+      color: #fff;
+    }
+    button:hover { background-color: #003300; }
+    input[type="date"] {
+      margin-left: 8px;
+      padding: 4px;
+    }
+    #filters {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 95%;
+      margin: 20px auto;
+    }
+    .filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .filters-row label {
+      flex: 1 1 20%;
+      min-width: 180px;
+      background: #004d00;
+      padding: 6px;
+      border-radius: 6px;
+    }
+    .filters-row input {
+      width: 100%;
+      padding: 6px;
+      border-radius: 4px;
+      border: none;
+    }
+    #pagination { margin-top: 20px; text-align: center; }
+    #pagination button { margin: 4px; }
+  </style>
+</head>
+<body>
+  <h1>📋 Список лабораторій</h1>
+
+  <!-- Фільтри -->
+  <section id="filters">
+    <div class="filters-row">
+      <label>Контрагент:
+        <input type="text" id="filterPartner" list="partnerOptions">
+        <datalist id="partnerOptions"></datalist>
+      </label>
+      <label>Місто:
+        <input type="text" id="filterCity" list="cityOptions">
+        <datalist id="cityOptions"></datalist>
+      </label>
+      <label>ЛПЗ:
+        <input type="text" id="filterInstitution" list="institutionOptions">
+        <datalist id="institutionOptions"></datalist>
+      </label>
+      <label>Прилад:
+        <input type="text" id="filterDevice" list="deviceOptions">
+        <datalist id="deviceOptions"></datalist>
+      </label>
+      <label>КП:
+        <input type="text" id="filterKp" list="kpOptions">
+        <datalist id="kpOptions"></datalist>
+      </label>
+      <label>ЄДРПОУ:
+        <input type="text" id="filterEdrpou" list="edrpouOptions">
+        <datalist id="edrpouOptions"></datalist>
+      </label>
+      <span id="managerFilterContainer"></span>
+    </div>
+    <div>
+      <button type="button" onclick="applyFilters()">🔍 Фільтрувати</button>
+      <button type="button" onclick="resetFilters()">♻️ Скинути</button>
+    </div>
+  </section>
+
+  <!-- Контейнер для карток -->
+  <div id="labsContainer" class="dashboard"></div>
+
+  <!-- Пагінація -->
+  <div id="pagination"></div>
+
+  <!-- Кнопки -->
+  <div>
+    <button onclick="createNewLab()">➕ Додати лабораторію</button>
+    <a href="../index.html"><button>🏠 Назад</button></a>
+  </div>
+
+  <script>
+    let labsData = [];
+    let currentPage = 1;
+    const pageSize = 25;
+
+    async function fetchLabs() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch("https://nodejs-production-7176.up.railway.app/labs", {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        labsData = await res.json();
+
+        showManagerFilterIfAllowed();
+        populateFilterOptions(labsData);
+        renderLabs();
+      } catch (err) {
+        document.getElementById("labsContainer").innerHTML =
+          "<p>⚠️ Не вдалося отримати лабораторії: " + err.message + "</p>";
+      }
+    }
+
+    function renderLabs() {
+      const container = document.getElementById("labsContainer");
+      container.innerHTML = "";
+
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      const labsPage = labsData.slice(start, end);
+
+      labsPage.forEach(lab => {
+        const devicesList = (lab.devices || [])
+          .map(d => d.category)
+          .filter(Boolean)
+          .join(", ");
+
+        const card = document.createElement("div");
+        card.className = "lab-card";
+        card.innerHTML = `
+          <h3>${lab.partner || "—"}</h3>
+          <p><b>Менеджер:</b> ${lab.manager || "—"}</p>
+          <p><b>Місто:</b> ${lab.city || "—"}</p>
+          <p><b>ЄДРПОУ:</b> ${lab.edrpou || "—"}</p>
+          <p><b>Прилади:</b> ${devicesList || "—"}</p>
+          <div class="lab-actions">
+            <button onclick="editLab('${lab.edrpou}')">✏️ Редагувати</button>
+
+            <button onclick="deleteLab('${lab._id}')">🗑️ Видалити</button>
+            <button onclick="showVisitCalendar('${lab._id}')">📅 Створити візит</button>
+            <span id="visitCalendar-${lab._id}" style="display:none;">
+              <input type="date" onchange="createVisit('${lab._id}', this.value)">
+            </span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      renderPagination();
+    }
+
+    function renderPagination() {
+      const totalPages = Math.ceil(labsData.length / pageSize);
+      const pagination = document.getElementById("pagination");
+      pagination.innerHTML = "";
+
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if (i === currentPage) btn.style.backgroundColor = "#003300";
+        btn.onclick = () => { currentPage = i; renderLabs(); };
+        pagination.appendChild(btn);
+      }
+    }
+
+    function showVisitCalendar(labId) {
+      const calendar = document.getElementById("visitCalendar-" + labId);
+      calendar.style.display = "inline";
+    }
+
+    function createVisit(labId, date) {
+      const token = localStorage.getItem("token");
+      fetch("https://nodejs-production-7176.up.railway.app/visits/new", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ labId, date })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert("✅ Візит створено на " + date);
+      });
+    }
+
+    function deleteLab(labId) {
+      const token = localStorage.getItem("token");
+      fetch("https://nodejs-production-7176.up.railway.app/labs/" + labId, {
+        method: "DELETE",
+        headers: { "Authorization": "Bearer " + token }
+      })
+      .then(res => res.json())
+      .then(() => fetchLabs());
+    }
+
+        function createNewLab() {
+      const token = localStorage.getItem("token");
+      fetch("https://nodejs-production-7176.up.railway.app/labs/new", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ name: "Нова лабораторія" })
+      })
+      .then(res => res.json())
+      .then(() => fetchLabs());
+    }
+
+ function editLab(edrpou) {
+  sessionStorage.setItem("editLabEdrpou", edrpou);
+  window.location.href = "labcard.html";
+}
+
+
+    function deleteLab(labId) {
+      const token = localStorage.getItem("token");
+      if (!confirm("Ви впевнені, що хочете видалити лабораторію?")) return;
+      fetch("https://nodejs-production-7176.up.railway.app/labs/" + labId, {
+        method: "DELETE",
+        headers: { "Authorization": "Bearer " + token }
+      })
+      .then(res => res.json())
+      .then(() => fetchLabs());
+    }
+
+    function showVisitCalendar(labId) {
+      const calendar = document.getElementById("visitCalendar-" + labId);
+      calendar.style.display = "inline";
+    }
+
+    function createVisit(labId, date) {
+      const token = localStorage.getItem("token");
+      fetch("https://nodejs-production-7176.up.railway.app/visits/new", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ labId, date })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert("✅ Візит створено на " + date);
+      });
+    }
+
+    // Показати підказки при фокусі
+    document.addEventListener("DOMContentLoaded", () => {
+      fetchLabs();
+      document.querySelectorAll("#filters input").forEach(input => {
+        input.addEventListener("focus", () => {
+          populateFilterOptions(labsData);
+          if (!input.value) {
+            input.value = " ";
+            setTimeout(() => input.value = "", 100);
+          }
+        });
+      });
+    });
+    function showManagerFilterIfAllowed() {
+  const role = localStorage.getItem("role"); // роль збережена після логіну
+  if (role === "admin" || role === "regional_manager") {
+    document.getElementById("managerFilterContainer").innerHTML = `
+      <label>Менеджер:
+        <input type="text" id="filterManager" list="managerOptions">
+        <datalist id="managerOptions"></datalist>
+      </label>
+    `;
+  } else {
+    document.getElementById("managerFilterContainer").innerHTML = "";
+  }
+}
+function populateFilterOptions(labs) {
+  const fields = {
+    partnerOptions: "partner",
+    cityOptions: "city",
+    institutionOptions: "institution",
+    edrpouOptions: "edrpou"
+  };
+
+  // базові поля
+  Object.entries(fields).forEach(([datalistId, field]) => {
+    const datalist = document.getElementById(datalistId);
+    if (!datalist) return;
+    datalist.innerHTML = "";
+    const uniqueValues = new Set();
+
+    labs.forEach(lab => {
+      if (lab[field]) uniqueValues.add(lab[field]);
+    });
+
+    uniqueValues.forEach(val => {
+      const option = document.createElement("option");
+      option.value = val;
+      datalist.appendChild(option);
+    });
+  });
+
+  // прилади (category)
+  const deviceOptions = document.getElementById("deviceOptions");
+  if (deviceOptions) {
+    deviceOptions.innerHTML = "";
+    const uniqueDevices = new Set();
+    labs.forEach(lab => {
+      (lab.devices || []).forEach(d => {
+        if (d.category) uniqueDevices.add(d.category);
+      });
+    });
+    uniqueDevices.forEach(val => {
+      const option = document.createElement("option");
+      option.value = val;
+      deviceOptions.appendChild(option);
+    });
+  }
+
+  // КП (якщо є у devices)
+  const kpOptions = document.getElementById("kpOptions");
+  if (kpOptions) {
+    kpOptions.innerHTML = "";
+    const uniqueKp = new Set();
+    labs.forEach(lab => {
+      (lab.devices || []).forEach(d => {
+        if (d.kp) uniqueKp.add(d.kp);
+      });
+    });
+    uniqueKp.forEach(val => {
+      const option = document.createElement("option");
+      option.value = val;
+      kpOptions.appendChild(option);
+    });
+  }
+}
+function applyFilters() {
+  const filters = {
+    partner: document.getElementById("filterPartner").value.trim().toLowerCase(),
+    city: document.getElementById("filterCity").value.trim().toLowerCase(),
+    institution: document.getElementById("filterInstitution").value.trim().toLowerCase(),
+    device: document.getElementById("filterDevice").value.trim().toLowerCase(),
+    kp: document.getElementById("filterKp").value.trim().toLowerCase(),
+    edrpou: document.getElementById("filterEdrpou").value.trim().toLowerCase(),
+    manager: document.getElementById("filterManager") ? document.getElementById("filterManager").value.trim().toLowerCase() : ""
+  };  
+  labsData = labsData.filter(lab => {
+    const matchesPartner = !filters.partner || (lab.partner && lab.partner.toLowerCase().includes(filters.partner));
+    const matchesCity = !filters.city || (lab.city && lab.city.toLowerCase().includes(filters.city));
+    const matchesInstitution = !filters.institution || (lab.institution && lab.institution.toLowerCase().includes(filters.institution));
+    const matchesEdrpou = !filters.edrpou || (lab.edrpou && lab.edrpou.toLowerCase().includes(filters.edrpou));
+    const matchesManager = !filters.manager || (lab.manager && lab.manager.toLowerCase().includes(filters.manager));
+
+    const matchesDevice = !filters.device || (lab.devices && lab.devices.some(d => d.category && d.category.toLowerCase().includes(filters.device)));
+    const matchesKp = !filters.kp || (lab.devices && lab.devices.some(d => d.kp && d.kp.toLowerCase().includes(filters.kp)));
+
+    return matchesPartner && matchesCity && matchesInstitution && matchesEdrpou && matchesManager && matchesDevice && matchesKp;
+  });
+  currentPage = 1;
+  renderLabs();
+}
+  </script>
+</body>
+</html>

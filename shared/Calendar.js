@@ -1,6 +1,9 @@
 let currentVisitId = null;
 let calendar = null;
 
+// ==========================
+// Кольори статусів
+// ==========================
 function statusColor(status) {
   switch ((status || "").toLowerCase()) {
     case "в процесі": return "#ff9800";
@@ -10,6 +13,10 @@ function statusColor(status) {
     default: return "#2196f3";
   }
 }
+
+// ==========================
+// Фільтри
+// ==========================
 function filterByStatus(status) {
   const s = (status || "заплановано").toLowerCase();
   if (s === "заплановано") return document.getElementById("filterPlanned").checked;
@@ -19,20 +26,27 @@ function filterByStatus(status) {
   if (s === "проведено") return document.getElementById("filterDone").checked;
   return true;
 }
-    function eventsFromVisits(visits) {
-      return visits
-        .filter(v => filterByStatus(v.status))
-        .map(v => ({
-          id: v.id,
-          title: `${v.labName} — ${v.status || "заплановано"}`,
-          start: v.date,
-          backgroundColor: statusColor(v.status),
-          borderColor: statusColor(v.status),
-          extendedProps: { visit: v }
-        }));
-    }
 
-    function showVisitMenu(visit) {
+// ==========================
+// Події для календаря
+// ==========================
+function eventsFromVisits(visits) {
+  return visits
+    .filter(v => filterByStatus(v.status))
+    .map(v => ({
+      id: v.id,
+      title: `${v.labName} — ${v.status || "заплановано"}`,
+      start: v.date,
+      backgroundColor: statusColor(v.status),
+      borderColor: statusColor(v.status),
+      extendedProps: { visit: v }
+    }));
+}
+
+// ==========================
+// Меню візиту
+// ==========================
+function showVisitMenu(visit) {
   currentVisitId = visit.id;
 
   document.getElementById("visitMenuInfo").innerHTML = `
@@ -42,226 +56,45 @@ function filterByStatus(status) {
     ${visit.tasks ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>` : ""}
   `;
 
-  // Bind actions to the selected visit
   document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
-  document.querySelector("#visitMenu .btn-cancel").onclick = () => { onCancelVisit(); };
-  document.querySelector("#visitMenu .btn-reschedule").onclick = () => rescheduleVisit(currentVisitId);
-  document.querySelector("#visitMenu .btn-edit").onclick = () => editLabCard(visit.labId);
+  document.querySelector("#visitMenu .btn-cancel").onclick = () => onCancelVisit();
+  document.querySelector("#visitMenu .btn-reschedule").onclick = () => onRescheduleVisit();
+  document.querySelector("#visitMenu .btn-edit").onclick = () => onEditLabCard();
 
   document.getElementById("visitMenu").classList.add("show");
 }
 
-function hideVisitMenu() { document.getElementById("visitMenu").classList.remove("show"); }
-
-function parseReagentAction(action) {
-  // Очікуваний формат: "Замов реагент — DIL-E (6 уп.)"
-  const match = action.match(/Замов реагент — ([^(]+)\((\d+)/);
-  if (match) {
-    return { name: match[1].trim(), neededQuantity: parseInt(match[2]) };
-  }
-  return { name: action, neededQuantity: 0 };
+function hideVisitMenu() {
+  document.getElementById("visitMenu").classList.remove("show");
 }
 
+// ==========================
+// Модалка візиту
+// ==========================
+function closeVisitModal() {
+  document.getElementById("visitModal").style.display = "none";
+}
+
+// ==========================
+// Дії з візитом (через visits.js)
+// ==========================
 function onStartVisit() {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === currentVisitId);
-  if (!v) return;
-
-  const labCards = loadLabCards();
-  const lab = labCards.find(l => l.id === v.labId);
-
-  // Шапка модалки
-  let headerHtml = `
-    <h3>Візит: ${lab.partner}</h3>
-    <p>Дата: ${v.date}</p>
-  `;
-
-  let buttonsHtml = "<div class='tab-buttons'>";
-  let contentsHtml = "";
-
-  (lab.devices || []).forEach((device, idx) => {
-    const reagentsFromVisit = (v.tasks || [])
-      .filter(t => t.device === device.device && t.action.startsWith("Замов реагент"));
-
-    buttonsHtml += `<button onclick="openTab(${idx})" id="tabBtn_${idx}">${device.device}</button>`;
-    contentsHtml += `
-      <div class="tab-content" id="tab_${idx}">
-        <label>Кількість аналізів на день:
-          <input type="number" id="testsPerDay_${idx}" value="${device.testCount || 0}">
-        </label>
-
-        <h4>Реагенти</h4>
-        <table>
-          <tr>
-            <th>Завдання (прогноз)</th>
-            <th>Домовленість (потреба)</th>
-            <th>Факт кількість</th>
-            <th>Факт дата</th>
-          </tr>
-          ${reagentsFromVisit.map((t, j) => {
-            const parsed = parseReagentAction(t.action);
-            const info = device.reagentsInfo?.[parsed.name] || {};
-            return `
-              <tr>
-                <td>${parsed.name} — ${v.date} (потреба: ${parsed.neededQuantity})</td>
-                <td><input type="number" id="agreement_${idx}_${j}" value="${parsed.neededQuantity}"></td>
-                <td><input type="number" id="factQty_${idx}_${j}" value="${info.lastOrderCount || 0}"></td>
-                <td><input type="date" id="factDate_${idx}_${j}" value="${info.lastOrderDate || ""}"></td>
-              </tr>
-            `;
-          }).join("")}
-        </table>
-
-        <h4>Сервіс</h4>
-        <table>
-          <tr><th></th><th>Вид сервісу</th><th>Дата</th></tr>
-          <tr>
-            <td>План</td>
-            <td><input type="text" id="servicePlanType_${idx}" value="${device.workType || ''}"></td>
-            <td><input type="date" id="servicePlanDate_${idx}" value="${(v.tasks.find(t => t.device === device.device && t.action === 'Сервіс')?.date) || ''}"></td>
-          </tr>
-          <tr>
-            <td>Домовленість</td>
-            <td><input type="text" id="serviceAgreementType_${idx}" value=""></td>
-            <td><input type="date" id="serviceAgreementDate_${idx}" value=""></td>
-          </tr>
-          <tr>
-            <td>Факт</td>
-            <td><input type="text" id="serviceFactType_${idx}" value="${device.workType || ''}"></td>
-            <td><input type="date" id="serviceFactDate_${idx}" value="${device.lastService || ''}"></td>
-          </tr>
-        </table>
-      </div>
-    `;
-  });
-
-  document.getElementById("visitModalTabs").innerHTML = headerHtml + buttonsHtml + contentsHtml;
-  document.getElementById("visitModal").style.display = "block";
-  openTab(0);
-}
-
-function openTab(idx) {
-  const tab = document.getElementById(`tab_${idx}`);
-  const btn = document.getElementById(`tabBtn_${idx}`);
-  if (!tab || !btn) return;
-
-  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".tab-buttons button").forEach(el => el.classList.remove("active"));
-  tab.classList.add("active");
-  btn.classList.add("active");
-}
-
-function editLabCard(labId) {
-  // зберігаємо ID лабораторії у localStorage або sessionStorage
-  localStorage.setItem("currentLabId", labId);
-
-  // переходимо на сторінку labCard.html
-  window.location.href = "/labcards/labcard.html";
-}
-function submitVisitData() {
-  const labCards = loadLabCards();
-  const lab = labCards.find(l => l.id === currentLabId);
-  if (!lab) return;
-
-  (lab.devices || []).forEach((device, idx) => {
-    device.testCount = parseInt(document.getElementById(`testsPerDay_${idx}`).value) || 0;
-
-    const reagentsFromVisit = (currentVisit.tasks || [])
-      .filter(t => t.device === device.device && t.taskType === "reagents");
-
-    reagentsFromVisit.forEach((task, j) => {
-      const agreementQty = parseInt(document.getElementById(`agreement_${idx}_${j}`).value) || 0;
-      const factQty = parseInt(document.getElementById(`factQty_${idx}_${j}`).value) || 0;
-      const factDate = document.getElementById(`factDate_${idx}_${j}`).value || "";
-
-      device.reagentsInfo[task.reagentName] = {
-        lastOrderCount: factQty,
-        lastOrderDate: factDate
-      };
-
-      task.agreement = { quantity: agreementQty };
-      task.fact = { quantity: factQty, date: factDate };
-    });
-
-    device.service = {
-      plan: {
-        type: document.getElementById(`servicePlanType_${idx}`).value || "",
-        date: document.getElementById(`servicePlanDate_${idx}`).value || ""
-      },
-      agreement: {
-        type: document.getElementById(`serviceAgreementType_${idx}`).value || "",
-        date: document.getElementById(`serviceAgreementDate_${idx}`).value || ""
-      },
-      fact: {
-        type: document.getElementById(`serviceFactType_${idx}`).value || "",
-        date: document.getElementById(`serviceFactDate_${idx}`).value || ""
-      }
-    };
-    device.lastService = device.service.fact.date;
-  });
-
-  currentVisit.status = "проведено";
-  saveLabCards(labCards);
-
-  // 🔄 перерахунок майбутніх візитів
-  recalculateSchedule(lab.id);
-
-  closeVisitModal();
-  rerenderCalendar();
-}
-
-function recalculateSchedule(labId) {
-  const labCards = loadLabCards();
-  const lab = labCards.find(l => l.id === labId);
-  if (!lab) return;
-
-  let visits = [];
-
-  (lab.devices || []).forEach(device => {
-    // реагенти: кожні 3 місяці
-    Object.keys(device.reagentsInfo || {}).forEach(name => {
-      const info = device.reagentsInfo[name];
-      if (info.lastOrderDate) {
-        const nextDate = addMonths(info.lastOrderDate, 3);
-        visits.push({
-          labId: lab.id,
-          labName: lab.partner,
-          date: nextDate,
-          tasks: [{ device: device.device, action: `Замов реагент — ${name}`, taskType: "reagents" }],
-          status: "заплановано"
-        });
-      }
-    });
-
-    // сервіс: кожні 6 місяців
-    if (device.lastService) {
-      const nextServiceDate = addMonths(device.lastService, 6);
-      visits.push({
-        labId: lab.id,
-        labName: lab.partner,
-        date: nextServiceDate,
-        tasks: [{ device: device.device, action: "Сервіс", taskType: "service" }],
-        status: "заплановано"
-      });
-    }
-  });
-
-  saveVisits(visits);
-}
-
-
-
-function closeVisitModal() { document.getElementById("visitModal").style.display = "none"; }
-function confirmStartVisit() {
-  updateVisitStatus(currentVisitId, "в процесі");
+  updateVisitStatusLS(currentVisitId, "в процесі");
   closeVisitModal();
   hideVisitMenu();
   rerenderCalendar();
 }
-function onCancelVisit() { cancelVisit(currentVisitId); hideVisitMenu(); rerenderCalendar(); }
-function onRescheduleVisit() {
- rescheduleVisit(currentVisitId);
+
+function onCancelVisit() {
+  cancelVisit(currentVisitId);
+  hideVisitMenu();
+  rerenderCalendar();
 }
+
+function onRescheduleVisit() {
+  rescheduleVisit(currentVisitId);
+}
+
 function onEditLabCard() {
   const visits = loadVisits();
   const v = visits.find(x => x.id === currentVisitId);
@@ -270,12 +103,18 @@ function onEditLabCard() {
   window.location.href = "../labcards/labcard.html";
 }
 
+// ==========================
+// Перерендер календаря
+// ==========================
 function rerenderCalendar() {
   const events = eventsFromVisits(loadVisits());
   calendar.removeAllEvents();
   events.forEach(e => calendar.addEvent(e));
 }
 
+// ==========================
+// Ініціалізація календаря
+// ==========================
 document.addEventListener("DOMContentLoaded", () => {
   const calendarEl = document.getElementById("calendar");
   calendar = new FullCalendar.Calendar(calendarEl, {
@@ -290,60 +129,12 @@ document.addEventListener("DOMContentLoaded", () => {
     eventClick: info => showVisitMenu(info.event.extendedProps.visit)
   });
   calendar.render();
-  // Експортуємо в window, якщо треба викликати ззовні
-      window.hideVisitMenu = hideVisitMenu;
-      window.onStartVisit = onStartVisit;
-      window.onCancelVisit = onCancelVisit;
-      window.onRescheduleVisit = onRescheduleVisit;
-      window.onEditLabCard = onEditLabCard;
-      window.rerenderCalendar = rerenderCalendar;
+
+  // Експортуємо у window
+  window.hideVisitMenu = hideVisitMenu;
+  window.onStartVisit = onStartVisit;
+  window.onCancelVisit = onCancelVisit;
+  window.onRescheduleVisit = onRescheduleVisit;
+  window.onEditLabCard = onEditLabCard;
+  window.rerenderCalendar = rerenderCalendar;
 });
-function rescheduleVisit(visitId) {
-  // Remove existing modal if any
-  const existing = document.getElementById("rescheduleModal");
-  if (existing) existing.remove();
-
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-
-  const modalHtml = `
-    <div id="rescheduleModal" class="modal">
-      <div class="modal-content">
-        <span class="close" onclick="closeRescheduleModal()">&times;</span>
-        <h3>Перенесення візиту</h3>
-        <label>Оберіть нову дату:
-          <input type="date" id="newVisitDate" value="${v.date}">
-        </label>
-        <div class="modal-actions" style="margin-top:12px;text-align:right;">
-          <button onclick="confirmReschedule('${visitId}')">✅ Зберегти</button>
-          <button onclick="closeRescheduleModal()">❌ Скасувати</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML("beforeend", modalHtml);
-  document.getElementById("rescheduleModal").style.display = "block";
-}
-
-function confirmReschedule(visitId) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-
-  const newDate = document.getElementById("newVisitDate").value;
-  if (!newDate) return;
-
-  v.date = newDate;
-  v.status = "перенесено"; // mark rescheduled
-  saveVisits(visits);
-
-  closeRescheduleModal();
-  hideVisitMenu();
-  rerenderCalendar();
-}
-
-function closeRescheduleModal() {
-  const modal = document.getElementById("rescheduleModal");
-  if (modal) modal.remove();
-}

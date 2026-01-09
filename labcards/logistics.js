@@ -1,9 +1,9 @@
-// logistics.js — узгоджена версія
+// logistics.js — узгоджена версія без export/import
 
-export const ORS_TOKEN =
+const ORS_TOKEN =
   "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjA3YmNiYmQxNWVmNTQxZTFhMzU3ZjkyMjZmZTVhNDc1IiwiaCI6Im11cm11cjY0In0=";
 
-export const orsDistanceCache = {};
+const orsDistanceCache = {};
 
 // ===== Утиліта для форматування дат =====
 function formatDateYYYYMMDD(dateObj) {
@@ -14,7 +14,7 @@ function formatDateYYYYMMDD(dateObj) {
 }
 
 // ===== Отримання відстані між містами через OpenRouteService =====
-export async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
+async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
   // нормалізуємо ключ кешу, щоб уникнути дублювання Київ__Львів vs Львів__Київ
   const key = [cityA, cityB].sort().join("__");
   if (orsDistanceCache[key]) return orsDistanceCache[key];
@@ -53,7 +53,7 @@ export async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
 }
 
 // ===== Пошук найближчої доступної дати для задачі =====
-export async function findNearbyAvailableDate(
+async function findNearbyAvailableDate(
   taskCity,
   taskSchedule,
   token = ORS_TOKEN,
@@ -93,6 +93,9 @@ export async function findNearbyAvailableDate(
   return fallbackDate || formatDateYYYYMMDD(candidate);
 }
 
-// ===== Експортуємо у глобальний простір, якщо потрібно =====
-window.findNearbyAvailableDate = findNearbyAvailableDate;
+// ===== Робимо глобально доступним =====
 window.ORS_TOKEN = ORS_TOKEN;
+window.orsDistanceCache = orsDistanceCache;
+window.getDistanceKmORS = getDistanceKmORS;
+window.findNearbyAvailableDate = findNearbyAvailableDate;
+window.formatDateYYYYMMDD = formatDateYYYYMMDD; 
