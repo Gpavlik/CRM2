@@ -34,8 +34,8 @@ function eventsFromVisits(visits) {
   return visits
     .filter(v => filterByStatus(v.status))
     .map(v => ({
-      id: v.id,
-      title: `${v.labName} — ${v.status || "заплановано"}`,
+      id: v._id,
+      title: `${v.labId?.institution || v.labName} — ${v.status || "заплановано"}`,
       start: v.date,
       backgroundColor: statusColor(v.status),
       borderColor: statusColor(v.status),
@@ -47,16 +47,15 @@ function eventsFromVisits(visits) {
 // Меню візиту
 // ==========================
 function showVisitMenu(visit) {
-  currentVisitId = visit.id;
-
+  currentVisitId = visit._id;
   document.getElementById("visitMenuInfo").innerHTML = `
-    <p><strong>${visit.labName}</strong></p>
-    <p>Дата: ${visit.date}</p>
+    <p><strong>${visit.labId?.institution || visit.labName}</strong></p>
+    <p>Дата: ${new Date(visit.date).toLocaleString()}</p>
     <p>Статус: ${visit.status || "заплановано"}</p>
     ${visit.tasks ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>` : ""}
   `;
-
   document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
+  document.querySelector("#visitMenu .btn-finish").onclick = () => onFinishVisit();
   document.querySelector("#visitMenu .btn-cancel").onclick = () => onCancelVisit();
   document.querySelector("#visitMenu .btn-reschedule").onclick = () => onRescheduleVisit();
   document.querySelector("#visitMenu .btn-edit").onclick = () => onEditLabCard();
@@ -69,45 +68,63 @@ function hideVisitMenu() {
 }
 
 // ==========================
-// Модалка візиту
+// Виклики до бекенду
 // ==========================
-function closeVisitModal() {
-  document.getElementById("visitModal").style.display = "none";
+async function patchVisit(action, body = {}) {
+  const token = localStorage.getItem("token");
+  await fetch(`https://nodejs-production-7176.up.railway.app/visits/${currentVisitId}/${action}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  await rerenderCalendar();
 }
 
 // ==========================
-// Дії з візитом (через visits.js)
+// Дії з візитом
 // ==========================
 function onStartVisit() {
-  updateVisitStatusLS(currentVisitId, "в процесі");
-  closeVisitModal();
+  patchVisit("start");
   hideVisitMenu();
-  rerenderCalendar();
 }
 
 function onCancelVisit() {
-  cancelVisit(currentVisitId);
+  patchVisit("cancel");
   hideVisitMenu();
-  rerenderCalendar();
 }
 
 function onRescheduleVisit() {
-  rescheduleVisit(currentVisitId);
+  const newDate = prompt("Введіть нову дату (YYYY-MM-DD HH:mm):");
+  if (!newDate) return;
+  patchVisit("reschedule", { newDate });
+  hideVisitMenu();
+}
+
+function onFinishVisit() {
+  patchVisit("finish");
+  hideVisitMenu();
 }
 
 function onEditLabCard() {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === currentVisitId);
-  if (!v) return;
-  localStorage.setItem("editLabCard", JSON.stringify({ labId: v.labId }));
+  localStorage.setItem("editLabCard", JSON.stringify({ labId: currentVisitId }));
   window.location.href = "../labcards/labcard.html";
 }
 
 // ==========================
 // Перерендер календаря
 // ==========================
-function rerenderCalendar() {
-  const events = eventsFromVisits(loadVisits());
+async function rerenderCalendar() {
+  if (!calendar) return;
+  const token = localStorage.getItem("token");
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const visits = await res.json();
+
+  const events = eventsFromVisits(visits);
   calendar.removeAllEvents();
   events.forEach(e => calendar.addEvent(e));
 }
@@ -115,7 +132,7 @@ function rerenderCalendar() {
 // ==========================
 // Ініціалізація календаря
 // ==========================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const calendarEl = document.getElementById("calendar");
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
@@ -125,7 +142,9 @@ document.addEventListener("DOMContentLoaded", () => {
       center: "title",
       right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
     },
-    events: eventsFromVisits(loadVisits()),
+    events: eventsFromVisits(await (await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+      headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+    })).json()),
     eventClick: info => showVisitMenu(info.event.extendedProps.visit)
   });
   calendar.render();
@@ -136,5 +155,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.onCancelVisit = onCancelVisit;
   window.onRescheduleVisit = onRescheduleVisit;
   window.onEditLabCard = onEditLabCard;
+  window.onFinishVisit = onFinishVisit;
   window.rerenderCalendar = rerenderCalendar;
 });

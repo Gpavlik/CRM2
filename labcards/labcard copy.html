@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Картка лабораторії</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background: linear-gradient(135deg, #006400, #004d00);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { margin-top: 30px; }
+    form {
+      max-width: 900px;
+      width: 95%;
+      margin: 20px auto;
+      padding: 20px;
+      background: #008000;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+    form label { display: block; margin: 12px 0; }
+    input {
+      width: 100%; padding: 8px;
+      border-radius: 6px; border: none;
+    }
+    .form-actions { margin-top: 20px; }
+    .form-actions button {
+      margin-right: 10px;
+      background: #006400; color: white;
+      border: none; cursor: pointer;
+      padding: 10px 14px; border-radius: 6px;
+    }
+    .form-actions button:hover { background: #003300; }
+    .device-block {
+      border: 1px solid #ccc; padding: 10px;
+      margin-bottom: 12px; background: #fff;
+      border-radius: 6px; color: #000;
+    }
+  </style>
+</head>
+<body>
+  <img src="../logo.svg" alt="logo" width="220">
+  <h1>🧪 Картка лабораторії</h1>
+
+  <form id="labForm">
+    <label>Назва партнера: <input type="text" id="partnerName" autocomplete="organization" required></label>
+    <label>Область: <input type="text" id="region" autocomplete="address-level1"></label>
+    <label>Місто: <input type="text" id="city" autocomplete="address-level2"></label>
+    <label>ЛПЗ: <input type="text" id="lpz" autocomplete="organization"></label>
+    <label>Адреса: <input type="text" id="labAddress" autocomplete="street-address"></label>
+    <label>Контрагент (особа): <input type="text" id="contractor" autocomplete="name"></label>
+    <label>Телефон: <input type="text" id="phone" autocomplete="tel"></label>
+    <label>ЄДРПОУ: <input type="text" id="labEdrpou" autocomplete="off" required></label>
+    <label>Менеджер: <input type="text" id="labManager" autocomplete="name"></label>
+
+    <section id="devicesSection" style="display:none;">
+      <h2>🔧 Прилади</h2>
+      <div id="devicesContainer"></div>
+    </section>
+
+    <!-- НОВИЙ блок для рекомендованої дати -->
+    <h2>📅 Планування візиту</h2>
+    <label>Рекомендована дата візиту:
+      <input type="date" id="recommendedVisitDate">
+    </label>
+    <button type="button" onclick="suggestVisitDate()">📅 Запропонувати дату</button>
+
+    <div class="form-actions">
+      <button type="button" onclick="saveLabCard()">💾 Зберегти</button>
+      <button type="button" onclick="updateLabCard()">🔄 Оновити</button>
+      <a href="./labs.html"><button type="button">⬅️ Назад</button></a>
+    </div>
+  </form>
+
+  <!-- Підключаємо logistics.js -->
+  <script src="logistics.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const edrpou = sessionStorage.getItem("editLabEdrpou");
+      if (!edrpou) {
+        console.log("ℹ️ Створення нової лабораторії");
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`https://nodejs-production-7176.up.railway.app/labs/${edrpou}`, {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        if (res.ok) {
+          const lab = await res.json();
+          fillForm(lab);
+        } else {
+          if (window.labsCache) {
+            const lab = window.labsCache.find(l => l.edrpou === edrpou);
+            if (lab) fillForm(lab);
+            else alert("❌ Лабораторію не знайдено");
+          } else {
+            alert("❌ Лабораторію не знайдено");
+          }
+        }
+      } catch (err) {
+        alert("❌ Помилка завантаження: " + err.message);
+      }
+    });
+
+    function fillForm(lab) {
+      document.getElementById("partnerName").value = lab.partner || "";
+      document.getElementById("region").value = lab.region || "";
+      document.getElementById("city").value = lab.city || "";
+      document.getElementById("lpz").value = lab.institution || "";
+      document.getElementById("labAddress").value = lab.address || "";
+      document.getElementById("contractor").value = lab.contractor || "";
+      document.getElementById("phone").value = lab.phone || "";
+      document.getElementById("labEdrpou").value = lab.edrpou || "";
+      document.getElementById("labManager").value = lab.manager || "";
+
+      if (lab.devices && lab.devices.length > 0) {
+        document.getElementById("devicesSection").style.display = "block";
+        const container = document.getElementById("devicesContainer");
+        container.innerHTML = "";
+        lab.devices.forEach(d => {
+          const div = document.createElement("div");
+          div.className = "device-block";
+          div.innerHTML = `<p><b>Категорія:</b> ${d.category || "—"}</p><p><b>Прилад:</b> ${d.device || "—"}</p>`;
+          container.appendChild(div);
+        });
+      }
+    }
+
+    async function saveLabCard() {
+      const lab = getFormData();
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch("https://nodejs-production-7176.up.railway.app/labs", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify(lab)
+        });
+        if (res.ok) {
+          alert("✅ Лабораторію створено");
+          window.location.href = "./labs.html";
+        } else {
+          alert("❌ Помилка створення");
+        }
+      } catch (err) {
+        alert("❌ Помилка: " + err.message);
+      }
+    }
+
+    async function updateLabCard() {
+      const edrpou = sessionStorage.getItem("editLabEdrpou");
+      if (!edrpou) {
+        alert("⚠️ Немає ЄДРПОУ для оновлення");
+        return;
+      }
+      const lab = getFormData();
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`https://nodejs-production-7176.up.railway.app/labs/${edrpou}`, {
+          method: "PATCH",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify(lab)
+        });
+        if (res.ok) {
+          alert("✅ Лабораторію оновлено");
+          window.location.href = "./labs.html";
+        } else {
+          alert("❌ Помилка оновлення");
+        }
+      } catch (err) {
+        alert("❌ Помилка: " + err.message);
+      }
+    }
+
+    function getFormData() {
+  return {
+    partner: document.getElementById("partnerName").value.trim(),
+    region: document.getElementById("region").value.trim(),
+    city: document.getElementById("city").value.trim(),
+    institution: document.getElementById("lpz").value.trim(),
+    address: document.getElementById("labAddress").value.trim(),
+    contractor: document.getElementById("contractor").value.trim(),
+    phone: document.getElementById("phone").value.trim(),
+    edrpou: document.getElementById("labEdrpou").value.trim(),
+    manager: document.getElementById("labManager").value.trim(),
+
+    // 🔧 Прилади — поки що пустий масив, але можна розширити
+    devices: collectDevices(),
+
+    // 📅 Рекомендована дата візиту (якщо користувач натиснув "Запропонувати дату")
+    recommendedVisitDate: document.getElementById("recommendedVisitDate").value || null
+  };
+}
+
+// Допоміжна функція для збору приладів з devicesSection
+function collectDevices() {
+  const container = document.getElementById("devicesContainer");
+  if (!container) return [];
+
+  const blocks = container.querySelectorAll(".device-block");
+  const devices = [];
+  blocks.forEach(block => {
+    const category = block.querySelector(".device-category")?.value || "";
+    const device = block.querySelector(".device-name")?.value || "";
+    if (category || device) {
+      devices.push({ category, device });
+    }
+  });
+  return devices;
+}
+    function suggestVisitDate() {
+      const today = new Date();
+      const suggestedDate = new Date(today);
+      suggestedDate.setDate(today.getDate() + 7); // Пропонуємо дату через тиждень
+      const yyyy = suggestedDate.getFullYear();
+      const mm = String(suggestedDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(suggestedDate.getDate()).padStart(2, '0');
+      document.getElementById("recommendedVisitDate").value = `${yyyy}-${mm}-${dd}`;
+    }
+  </script>             
+</body>
+</html>

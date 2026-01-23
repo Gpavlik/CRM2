@@ -1,17 +1,25 @@
 // ==========================
-// Робота зі сховищем
+// Робота з бекендом
 // ==========================
-function loadVisits() {
-  try {
-    const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-    return Array.isArray(visits) ? visits : [];
-  } catch {
-    return [];
-  }
+async function loadVisits() {
+  const token = localStorage.getItem("token");
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  return await res.json();
 }
 
-function saveVisits(visits) {
-  localStorage.setItem("visits", JSON.stringify(visits));
+async function saveVisit(visit) {
+  const token = localStorage.getItem("token");
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(visit)
+  });
+  return await res.json();
 }
 
 function loadLabCards() {
@@ -21,100 +29,83 @@ function loadLabCards() {
 // ==========================
 // Генерація візитів з карток
 // ==========================
-function generateVisitsFromLabCards() {
+async function generateVisitsFromLabCards() {
   const labCards = loadLabCards();
-  const visits = loadVisits();
   const nextDelivery = getNextDeliveryDate();
   const newVisits = [];
 
-  labCards.forEach(lab => {
-    (lab.devices || []).forEach(device => {
-      (device.reagents || []).forEach(r => {
-        newVisits.push({
-          id: `${lab.id}_${Date.now()}`,
+  for (const lab of labCards) {
+    for (const device of (lab.devices || [])) {
+      for (const r of (device.reagents || [])) {
+        const visit = {
           labId: lab.id,
           labName: lab.partner,
           date: nextDelivery,
           devices: [{ deviceName: device.device, reagents: [{ name: r.name }] }],
           status: "заплановано"
-        });
-      });
+        };
+        await saveVisit(visit);
+        newVisits.push(visit);
+      }
 
       const serviceIntervalDays = device.serviceIntervalDays || 90;
       const startDate = device.soldDate ? new Date(device.soldDate) : new Date();
       const firstServiceDate = new Date(startDate);
       firstServiceDate.setDate(firstServiceDate.getDate() + serviceIntervalDays);
 
-      newVisits.push({
-        id: `${lab.id}_${Date.now()}`,
+      const visit = {
         labId: lab.id,
         labName: lab.partner,
         date: formatDateYYYYMMDD(firstServiceDate),
         devices: [{ deviceName: device.device, reagents: [{ name: "Сервіс" }] }],
         status: "заплановано"
-      });
-    });
-  });
+      };
+      await saveVisit(visit);
+      newVisits.push(visit);
+    }
+  }
 
-  saveVisits([...visits, ...newVisits]);
   return newVisits;
 }
 
 // ==========================
 // Оновлення статусу
 // ==========================
-function updateVisitStatusLS(visitId, status) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (v) {
-    v.status = status;
-    saveVisits(visits);
-  }
-}
-
-function cancelVisit(visitId) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (v) {
-    v.status = "відмінено";
-    saveVisits(visits);
-  }
-}
-
-function completeVisit(visitId, factUpdates) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-
-  v.devices.forEach(device => {
-    device.reagents.forEach(r => {
-      if (factUpdates[r.name]) {
-        r.fact = { quantity: factUpdates[r.name].quantity, date: factUpdates[r.name].date };
-      }
-    });
+async function updateVisitStatus(visitId, action, body = {}) {
+  const token = localStorage.getItem("token");
+  await fetch(`https://nodejs-production-7176.up.railway.app/visits/${visitId}/${action}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
   });
+}
 
-  v.status = "проведено";
-  saveVisits(visits);
-  syncFactToLabCard(v);
-  scheduleNextVisit(v.labId);
+async function cancelVisit(visitId) {
+  await updateVisitStatus(visitId, "cancel");
+}
+
+async function completeVisit(visitId, factUpdates) {
+  await updateVisitStatus(visitId, "finish", { factUpdates });
+}
+
+async function rescheduleVisit(visitId, newDate) {
+  await updateVisitStatus(visitId, "reschedule", { newDate });
 }
 
 // ==========================
-// Перенесення візиту
+// Модалка перенесення
 // ==========================
-function rescheduleVisit(visitId) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-
+function rescheduleVisitModal(visitId, currentDate) {
   const modalHtml = `
     <div id="rescheduleModal" class="modal">
       <div class="modal-content">
         <span class="close" onclick="closeRescheduleModal()">&times;</span>
         <h3>Перенесення візиту</h3>
         <label>Оберіть нову дату:
-          <input type="date" id="newVisitDate" value="${v.date}">
+          <input type="date" id="newVisitDate" value="${currentDate}">
         </label>
         <div class="modal-actions" style="margin-top:12px;text-align:right;">
           <button onclick="confirmReschedule('${visitId}')">✅ Зберегти</button>
@@ -127,18 +118,10 @@ function rescheduleVisit(visitId) {
   document.getElementById("rescheduleModal").style.display = "block";
 }
 
-function confirmReschedule(visitId) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-
+async function confirmReschedule(visitId) {
   const newDate = document.getElementById("newVisitDate").value;
   if (!newDate) return;
-
-  v.date = newDate;
-  v.status = "перенесено";
-  saveVisits(visits);
-
+  await rescheduleVisit(visitId, newDate);
   closeRescheduleModal();
   hideVisitMenu();
   rerenderCalendar();
@@ -152,20 +135,27 @@ function closeRescheduleModal() {
 // ==========================
 // Створення вручну
 // ==========================
-function createManualVisit({ labId, labName, date, devices = [] }) {
-  const visits = loadVisits();
-  const filtered = visits.filter(v => !((v.labId || v.labName) === (labId || labName) && v.date === date));
+async function createManualVisit({ labId, labName, date, devices = [] }) {
+  const token = localStorage.getItem("token");
   const newVisit = {
-    id: `${labId || labName}_${Date.now()}`,
-    labId: labId || null,
+    labId,
     labName,
     date,
     devices,
     notes: "",
     status: "заплановано"
   };
-  saveVisits([...filtered, newVisit]);
-  return newVisit;
+
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(newVisit)
+  });
+
+  return await res.json();
 }
 
 // ==========================
@@ -180,31 +170,29 @@ function calculateFinancials({ devicePrice, reagentCosts, serviceCosts, replacem
 // ==========================
 // Синхронізація факту у labCard
 // ==========================
-function syncFactToLabCard(visit) {
-  const labCards = loadLabCards();
-  const lab = labCards.find(l => l.id === visit.labId);
-  if (!lab) return;
-
-  visit.devices.forEach(device => {
-    const labDevice = lab.devices.find(d => d.device === device.deviceName);
-    if (!labDevice) return;
-    device.reagents.forEach(r => {
-      const labReagent = labDevice.reagents.find(lr => lr.name === r.name);
-      if (labReagent && r.fact?.quantity && r.fact?.date) {
-        labReagent.lastDelivery = { quantity: r.fact.quantity, date: r.fact.date };
-      }
-    });
+async function syncFactToLabCard(visit) {
+  const token = localStorage.getItem("token");
+  await fetch(`https://nodejs-production-7176.up.railway.app/labs/${visit.labId}/sync`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ visit })
   });
-
-  localStorage.setItem("labCards", JSON.stringify(labCards));
 }
 
 // ==========================
 // Прогноз наступного візиту
 // ==========================
-function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
-  const labCards = loadLabCards();
-  const visits = loadVisits();
+async function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
+  const token = localStorage.getItem("token");
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const visits = await res.json();
+
+  const labCards = JSON.parse(localStorage.getItem("labCards") || "[]");
   const lab = labCards.find(l => l.id === labId);
   if (!lab) return [];
 
@@ -252,70 +240,45 @@ function predictNextVisitDate(labId, daysWindow = 60, reserveDays = 30) {
 // ==========================
 // Автопланування задач
 // ==========================
-function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
-  const labCards = loadLabCards();
-  const visits = loadVisits();
-  const lab = labCards.find(l => l.id === labId);
-  if (!lab) return;
+async function autoPlanNextTasks(labId, daysWindow = 60, reserveDays = 30) {
+  const predictions = await predictNextVisitDate(labId, daysWindow, reserveDays);
 
-  const now = new Date();
-  const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
-
-  (lab.devices || []).forEach(device => {
-    (device.reagents || []).forEach(reagent => {
-      if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
-
-      let totalUsed = 0;
-      visits.forEach(v => {
-        if (v.labId !== labId) return;
-        (v.devices || []).forEach(d => {
-          if (d.deviceName !== device.device) return;
-          (d.reagents || []).forEach(r => {
-            if (r.name === reagent.name && r.fact?.date && r.fact?.quantity) {
-              const factDate = new Date(r.fact.date);
-              if (factDate >= startWindow && factDate <= now) {
-                totalUsed += r.fact.quantity;
-              }
-            }
-          });
-        });
-      });
-
-      const daysUsed = (now - startWindow) / (1000 * 60 * 60 * 24);
-      const dailyRate = totalUsed / daysUsed || 0.01;
-      const daysLeft = reagent.lastDelivery.quantity / dailyRate;
-      const nextVisitDate = new Date(
-        new Date(reagent.lastDelivery.date).getTime() +
-        (daysLeft - reserveDays) * 24 * 60 * 60 * 1000
-      );
-
-      if (!lab.tasks) lab.tasks = [];
-      lab.tasks.push({
-        taskType: "reagents",
-        reagentName: reagent.name,
-        neededQuantity: Math.round(dailyRate * reserveDays),
-        date: nextVisitDate.toISOString().split("T")[0]
-      });
-    });
+  const token = localStorage.getItem("token");
+  await fetch(`https://nodejs-production-7176.up.railway.app/labs/${labId}/tasks`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ tasks: predictions })
   });
-
-  localStorage.setItem("labCards", JSON.stringify(labCards));
 }
 
-// ==========================
+/// ==========================
 // Планування наступного візиту
 // ==========================
-function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
-  const labCards = loadLabCards();
-  const visits = loadVisits();
-  const lab = labCards.find(l => l.id === labId);
+async function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
+  const token = localStorage.getItem("token");
+
+  // підтягнути лабораторію з бекенду
+  const labRes = await fetch(`https://nodejs-production-7176.up.railway.app/labs/${labId}`, {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const lab = await labRes.json();
+
+  // підтягнути всі візити
+  const visitsRes = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const visits = await visitsRes.json();
+
   if (!lab) return null;
 
   const now = new Date();
   const startWindow = new Date(now.getTime() - daysWindow * 24 * 60 * 60 * 1000);
   let earliestEndDate = null;
 
-  lab.devices.forEach(device => {
+  (lab.devices || []).forEach(device => {
     (device.reagents || []).forEach(reagent => {
       if (!reagent.lastDelivery?.quantity || !reagent.lastDelivery?.date) return;
 
@@ -352,15 +315,11 @@ function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
   const dateKey = nextVisitDate.toISOString().split("T")[0];
 
   const newVisit = {
-    id: `${labId}_${dateKey}`,
     labId,
     labName: lab.partner,
     date: dateKey,
-    devices: lab.devices.map(device => ({
+    devices: (lab.devices || []).map(device => ({
       deviceName: device.device,
-      forecast: { quantity: 0 },
-      agreement: { quantity: 0 },
-      fact: { quantity: 0, date: "" },
       testsPerDay: device.testsPerDay || 0,
       reagents: [
         ...(device.reagents || []).map(r => ({
@@ -376,22 +335,44 @@ function scheduleNextVisit(labId, reserveDays = 14, daysWindow = 60) {
     status: "заплановано"
   };
 
-  const existingKey = `${labId}_${dateKey}`;
-  const filtered = visits.filter(v => `${v.labId}_${v.date}` !== existingKey);
-  saveVisits([...filtered, newVisit]);
-  return newVisit;
+  // створити візит у бекенді
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(newVisit)
+  });
+
+  return await res.json();
 }
 
 // ==========================
 // Обробка звітів
 // ==========================
-function processVisitReport(visitReports) {
-  const allLabs = loadLabCards();
-  // тут можна додати оновлення карток за звітами
-  localStorage.setItem("labCards", JSON.stringify(allLabs));
+async function processVisitReport(visitReports) {
+  const token = localStorage.getItem("token");
 
-  const generated = generateVisitsFromLabCards();
-  const visits = loadVisits();
+  // оновлення карток лабораторій за звітами
+  await fetch("https://nodejs-production-7176.up.railway.app/labs/syncReports", {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ reports: visitReports })
+  });
+
+  // згенерувати нові візити
+  const generated = await generateVisitsFromLabCards();
+
+  // підтягнути існуючі
+  const visitsRes = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const visits = await visitsRes.json();
+
   const existingKeys = new Set(visits.map(v => `${v.labId}_${v.date}`));
   const toAdd = [];
 
@@ -400,6 +381,33 @@ function processVisitReport(visitReports) {
     if (!existingKeys.has(key)) toAdd.push(visit);
   });
 
-  saveVisits([...visits, ...toAdd]);
+  for (const v of toAdd) {
+    await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(v)
+    });
+  }
 }
-  
+
+// ==========================
+// Відображення у календарі
+// ==========================
+window.onload = async () => {
+  const token = localStorage.getItem("token");
+  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+  const visits = await res.json();
+
+  const container = document.getElementById("calendar");
+  visits.forEach(v => {
+    const div = document.createElement("div");
+    div.className = "visit-entry";
+    div.innerHTML = `📅 ${v.date} ⏰ ${v.time || ""} — Лабораторія ID: ${v.labId}`;
+    container.appendChild(div);
+  });
+};

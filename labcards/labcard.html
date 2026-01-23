@@ -1,110 +1,83 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Картка лабораторії</title>
   <style>
     body {
-  font-family: Arial, sans-serif;
-  margin: 0; padding: 0;
-  background: linear-gradient(135deg, #006400, #004d00);
-  color: #fff;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-h1 { margin-top: 30px; }
-form {
-  max-width: 1000px;
-  width: 95%;
-  margin: 20px auto;
-  padding: 20px;
-  background: #008000;
-  border-radius: 12px;
-  box-shadow: 0 0 20px rgba(0,0,0,0.6);
-}
-form label {
-  display: block;
-  margin: 12px 0;
-}
-input, select {
-  width: 100%;
-  padding: 8px;
-  border-radius: 6px;
-  border: none;
-}
-.form-actions {
-  margin-top: 20px;
-}
-.form-actions button {
-  margin-right: 10px;
-  background: #006400;
-  color: white;
-  border: none;
-  cursor: pointer;
-  padding: 10px 14px;
-  border-radius: 6px;
-}
-.form-actions button:hover {
-  background: #003300;
-}
-.device-block, #taskPreviewSection {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin-bottom: 12px;
-  background: #fff;
-  border-radius: 6px;
-  color: #000;
-}
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background: linear-gradient(135deg, #006400, #004d00);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { margin-top: 30px; }
+    form {
+      max-width: 900px;
+      width: 95%;
+      margin: 20px auto;
+      padding: 20px;
+      background: #008000;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+    form label { display: block; margin: 12px 0; }
+    input {
+      width: 98%; padding: 8px;
+      border-radius: 6px; border: none;
+    }
+    .form-actions { margin-top: 20px; }
+    .form-actions button, .back-btn {
+      margin-right: 10px;
+      background: #006400; color: white;
+      border: none; cursor: pointer;
+      padding: 10px 14px; border-radius: 6px;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .form-actions button:hover, .back-btn:hover { background: #003300; }
+    .device-block {
+      border: 1px solid #ccc; padding: 10px;
+      margin-bottom: 12px; background: #fff;
+      border-radius: 6px; color: #000;
+    }
+    #mapContainer {
+      margin-top: 20px;
+      width: 100%;
+      height: 300px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: #eee;
+    }
   </style>
-  <script src="labcards.js" defer></script>
-  <script src="logistics.js" defer></script>
 </head>
 <body>
   <img src="../logo.svg" alt="logo" width="220">
   <h1>🧪 Картка лабораторії</h1>
 
   <form id="labForm">
-    <label>Назва партнера:
-      <input type="text" id="partnerName" required>
-    </label>
-
-    <label>Область:
-      <input list="regionList" id="region" onfocus="fillRegionOptions()" onchange="fillCityOptions()">
+    <label>Назва партнера: <input type="text" id="partnerName"></label>
+    <label>Область: 
+      <input type="text" id="region" list="regionList">
       <datalist id="regionList"></datalist>
     </label>
-
-    <label>Місто:
-      <input list="cityList" id="city" onfocus="fillCityOptions()" onchange="fillLpzOptions()">
+    <label>Місто: 
+      <input type="text" id="city" list="cityList">
       <datalist id="cityList"></datalist>
     </label>
-
-    <label>ЛПЗ:
-      <input list="lpzList" id="lpz" onfocus="fillLpzOptions()" onchange="prefillLabData()">
+    <label>ЛПЗ: 
+      <input type="text" id="lpz" list="lpzList" onblur="prefillLabData()">
       <datalist id="lpzList"></datalist>
     </label>
-
-    <label>Адреса:
-      <input type="text" id="labAddress">
-    </label>
-
-    <label>Контрагент (особа):
-      <input type="text" id="contractor">
-    </label>
-
-    <label>Телефон:
-      <input type="text" id="phone">
-    </label>
-
-    <label>ЄДРПОУ:
-      <input type="text" id="labEdrpou" required>
-    </label>
-
-    <label>Регіон:
-      <input type="text" id="labManager">
-    </label>
+    <label>Адреса: <input type="text" id="labAddress"></label>
+    <label>Контрагент: <input type="text" id="contractor"></label>
+    <label>Телефон: <input type="text" id="phone"></label>
+    <label>ЄДРПОУ: <input type="text" id="labEdrpou"></label>
+    <label>Менеджер: <input type="text" id="labManager"></label>
 
     <!-- Прилади -->
     <section id="devicesSection" style="display:none;">
@@ -113,38 +86,59 @@ input, select {
       <button type="button" onclick="addDevice()">➕ Додати прилад</button>
     </section>
 
-    <!-- Прев’ю задач -->
-    <section id="taskPreviewSection">
-      <h2>📋 Прев’ю задач</h2>
-      <div id="taskPreview"></div>
-    </section>
+    <!-- Планування візиту -->
+    <h2>📅 Планування візиту</h2>
+    <label>Рекомендована дата візиту:
+      <input type="date" id="recommendedVisitDate">
+    </label>
+    <button type="button" onclick="suggestVisitDate()">📅 Запропонувати дату</button>
 
-    <!-- Кнопки -->
     <div class="form-actions">
-      <button type="button" onclick="showTaskPreviewBeforeSave(getLabCardFromForm(), () => saveLabCard())">💾 Зберегти</button>
+      <button type="button" onclick="saveLabCard()">💾 Зберегти</button>
       <button type="button" onclick="updateLabCard(document.getElementById('labEdrpou').value)">🔄 Оновити</button>
+      <a href="./labs.html" class="back-btn">⬅️ Назад</a>
     </div>
   </form>
 
-  <script>
-    // Виклик ініціалізації при завантаженні
-    //document.addEventListener("DOMContentLoaded", initLabCard);
+  <!-- Контейнер для карти -->
+  <div id="mapContainer">🗺️ Тут буде карта з логістики</div>
 
-    // Допоміжна функція для збору даних з форми
-    function getLabCardFromForm() {
-      return {
-        partner: document.getElementById("partnerName").value.trim(),
-        region: document.getElementById("region").value.trim(),
-        city: document.getElementById("city").value.trim(),
-        institution: document.getElementById("lpz").value.trim(),
-        address: document.getElementById("labAddress").value.trim(),
-        contractor: document.getElementById("contractor").value.trim(),
-        phone: document.getElementById("phone").value.trim(),
-        edrpou: document.getElementById("labEdrpou").value.trim(),
-        manager: document.getElementById("labManager").value.trim(),
-        devices: [] // буде заповнено у JS
-      };
+  <!-- Підключаємо спільні скрипти -->
+  <script src="labcards.js"></script>
+  <script src="logistics.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // ініціалізація картки з labcards.js
+      initLabCard();
+      // заповнення підказок
+      fillRegionOptions();
+      fillCityOptions();
+      fillLpzOptions();
+    });
+
+    function suggestVisitDate() {
+      const today = new Date();
+      const suggestedDate = new Date(today);
+      suggestedDate.setDate(today.getDate() + 7);
+      const yyyy = suggestedDate.getFullYear();
+      const mm = String(suggestedDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(suggestedDate.getDate()).padStart(2, '0');
+      document.getElementById("recommendedVisitDate").value = `${yyyy}-${mm}-${dd}`;
     }
+
+    // Приклад інтеграції з logistics.js: показ карти з адресою
+    async function showLabOnMap() {
+      const city = document.getElementById("city").value;
+      const region = document.getElementById("region").value;
+      if (!city || !region) return;
+
+      const distance = await getDistanceKmORS("Київ", city);
+      document.getElementById("mapContainer").innerHTML =
+        `📍 Лабораторія у ${city}, ${region}. Відстань від Києва ≈ ${Math.round(distance)} км`;
+    }
+
+    document.getElementById("city").addEventListener("blur", showLabOnMap);
   </script>
 </body>
 </html>

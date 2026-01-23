@@ -6,7 +6,11 @@
 let labsCache = [];          // кеш лабораторій з бекенду
 let calculators = {};        // кеш конфігів приладів
 let kpListByDevice = {};     // КП по приладах
+window.labsData = [];            // початкові дані лабораторій (вбудовані)
+window.filteredLabs = [];
 let deviceCount = 0;         // лічильник приладів
+
+
 const API_URL = "https://nodejs-production-7176.up.railway.app";
 
 // ==========================
@@ -44,19 +48,28 @@ function setValue(id, value) {
 // Завантаження лабораторій із бекенду
 // ==========================
 async function loadLabsCache() {
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/labs`, {
-      headers: { "Authorization": "Bearer " + token }
-    });
-    if (!res.ok) throw new Error("Не вдалося завантажити лабораторії");
-    labsCache = await res.json();
-    console.log("✅ Лабораторії завантажено у кеш:", labsCache);
-  } catch (err) {
-    console.error("❌ Помилка завантаження лабораторій:", err);
-    alert("⚠️ Не вдалося завантажити лабораторії.");
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_URL}/labs`, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  const labsData = await res.json();
+
+  if (Array.isArray(labsData) && labsData.length > 0) {
+    labsCache = labsData;
+    console.log(`✅ Лабораторії завантажено у кеш: (${labsCache.length})`);
+    document.dispatchEvent(new Event("labsCacheReady"));
+  } else {
+    console.warn("⚠️ Лабораторії не завантажено або масив порожній");
   }
 }
+// Початкове завантаження лабораторій у кеш із вбудованих даних
+labsCache = labsData;
+console.log(`✅ Лабораторії завантажено у кеш: (${labsCache.length})`);
+
+// сигнал для labs.html
+document.dispatchEvent(new Event("labsCacheReady"));
+
+
 
 async function loadLabCards() {
   try {
@@ -96,8 +109,10 @@ async function applyFilters() {
     const edrpou = document.getElementById("filterEdrpou")?.value.trim().toLowerCase() || "";
     const manager = document.getElementById("filterManager")?.value.trim().toLowerCase() || "";
     const kp = document.getElementById("kpFilter")?.value.trim().toLowerCase() || "";
+    const deviceMode = document.getElementById("filterDevices")?.value || "all"; 
+    // all | with | without
 
-    const filtered = labsCache.filter(l =>
+    let filtered = labsCache.filter(l =>
       (!name || l.partner?.toLowerCase().includes(name)) &&
       (!region || l.region?.toLowerCase() === region) &&
       (!city || l.city?.toLowerCase() === city) &&
@@ -109,6 +124,13 @@ async function applyFilters() {
       (!manager || l.manager?.toLowerCase() === manager) &&
       (!kp || (Array.isArray(l.devices) && l.devices.some(d => d.kp?.toLowerCase() === kp)))
     );
+
+    // трипозиційний перемикач
+    if (deviceMode === "with") {
+      filtered = filtered.filter(l => l.devices && l.devices.length > 0);
+    } else if (deviceMode === "without") {
+      filtered = filtered.filter(l => !l.devices || l.devices.length === 0);
+    }
 
     renderLabCards(filtered);
 
@@ -122,7 +144,7 @@ function resetFilters() {
   const filterIds = [
     "filterName","filterRegion","filterCity","filterInstitution",
     "filterDevice","filterContractor","filterPhone","filterEdrpou",
-    "filterManager","kpFilter"
+    "filterManager","kpFilter","filterDevices"
   ];
   filterIds.forEach(id => {
     const el = document.getElementById(id);
@@ -130,6 +152,7 @@ function resetFilters() {
   });
   renderLabCards(labsCache);
 }
+
 // ==========================
 // Каскадні підказки
 // ==========================
@@ -181,6 +204,50 @@ function prefillLabData() {
     lab.devices.forEach((d, idx) => addDevice(idx, d));
   }
 }
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadLabsCache();
+  populateFilterOptions();
+  applyFilters(); // початковий рендер
+
+  document.getElementById("filterRegion").addEventListener("change", applyFilters);
+const managerFilter = document.getElementById("filterManager");
+if (managerFilter) {
+  managerFilter.addEventListener("change", applyFilters);
+}
+
+  document.getElementById("filterDevices").addEventListener("change", applyFilters);
+});
+function populateFilterOptions() {
+  if (!labsCache || labsCache.length === 0) return;
+
+  const regions = [...new Set(labsCache.map(l => l.region).filter(Boolean))];
+  const managers = [...new Set(labsCache.map(l => l.manager).filter(Boolean))];
+
+  const regionSelect = document.getElementById("filterRegion");
+  const managerSelect = document.getElementById("filterManager");
+
+  if (regionSelect) {
+    // очищаємо перед додаванням
+    regionSelect.innerHTML = "";
+    regions.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = r;
+      opt.textContent = r;
+      regionSelect.appendChild(opt);
+    });
+  }
+
+  if (managerSelect) {
+    managerSelect.innerHTML = "";
+    managers.forEach(m => {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      managerSelect.appendChild(opt);
+    });
+  }
+}
+
 // ==========================
 // Ініціалізація картки лабораторії
 // ==========================
@@ -1226,6 +1293,34 @@ function getValue(id) {
 function loadLabCards() {
   return JSON.parse(localStorage.getItem("labCards")) || [];
 }
+function generateReagentsReport(labs) {
+  let reportHtml = "<h3>📊 Звіт по закупках реагентів</h3><table border='1' cellpadding='5'>";
+  reportHtml += "<tr><th>Лабораторія</th><th>Прилад</th><th>Реагент</th><th>Останнє замовлення</th><th>Кількість</th><th>Прогноз (днів)</th></tr>";
+
+  labs.forEach(lab => {
+    (lab.devices || []).forEach(device => {
+      if (device.reagentsInfo) {
+        Object.entries(device.reagentsInfo).forEach(([name, info]) => {
+          const count = info.lastOrderCount || 0;
+          const date = info.lastOrderDate || "—";
+          const forecast = count > 0 ? Math.floor(count / 25) : "—"; // умовно 25 тестів на упаковку
+          reportHtml += `<tr>
+            <td>${lab.partner}</td>
+            <td>${device.device}</td>
+            <td>${name}</td>
+            <td>${date}</td>
+            <td>${count}</td>
+            <td>${forecast}</td>
+          </tr>`;
+        });
+      }
+    });
+  });
+
+  reportHtml += "</table>";
+  const container = document.getElementById("reagentsReport");
+  if (container) container.innerHTML = reportHtml;
+}
 
 // ==========================
 // Глобальні прив’язки до window
@@ -1266,3 +1361,4 @@ window.formatDate = formatDate;
 window.setValue = setValue;
 window.getValue = getValue; 
 window.loadLabCards = loadLabCards;
+window.generateReagentsReport = generateReagentsReport;

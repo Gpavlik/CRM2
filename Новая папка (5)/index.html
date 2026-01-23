@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <title>Інтерактивна карта України</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    .toolbar {
+      position: absolute; top:10px; left: 60px; z-index: 1000;
+      background: #fff; padding: 8px; border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      display:flex; gap:8px; align-items:center; flex-wrap: wrap;
+    }
+    .legend {
+      position: absolute;
+      top: 80px; left: 10px;
+      background: #fff;
+      padding: 8px;
+      border-radius: 6px;
+      max-width: 600px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      z-index: 2000;
+    }
+    select, button, input { padding: 6px 10px; }
+    .legend-color { display:flex; align-items:center; margin-bottom:4px; }
+    .color-box { width:20px; height:20px; margin-right:6px; border:1px solid #555; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="legend" id="legend">
+    <div><b>Клік по області/району:</b> замальовування</div>
+    <hr>
+    <div><b>Легенда кольорів:</b></div>
+    <div class="legend-color"><div class="color-box" style="background:#ffcc80"></div>Персиковий –<input type="text" data-color="#ffcc80"></div>
+    <div class="legend-color"><div class="color-box" style="background:#90caf9"></div>Блакитний –<input type="text" data-color="#90caf9"></div>
+    <div class="legend-color"><div class="color-box" style="background:#a5d6a7"></div>Зелений –<input type="text" data-color="#a5d6a7"></div>
+    <div class="legend-color"><div class="color-box" style="background:#f48fb1"></div>Рожевий –<input type="text" data-color="#f48fb1"></div>
+    <div class="legend-color"><div class="color-box" style="background:#ffe082"></div>Жовтий –<input type="text" data-color="#ffe082"></div>
+    <div class="legend-color"><div class="color-box" style="background:#ce93d8"></div>Фіолетовий –<input type="text" data-color="#ce93d8"></div>
+    <div class="legend-color"><div class="color-box" style="background:#ffab91"></div>Помаранчевий –<input type="text" data-color="#ffab91"></div>
+    <div class="legend-color"><div class="color-box" style="background:#80cbc4"></div>М’ятний –<input type="text" data-color="#80cbc4"></div>
+    <div class="legend-color"><div class="color-box" style="background:#c5e1a5"></div>Світло-зелений –<input type="text" data-color="#c5e1a5"></div>
+    <div class="legend-color"><div class="color-box" style="background:#b0bec5"></div>Сірий –<input type="text" data-color="#b0bec5"></div>
+    <div class="legend-color"><div class="color-box" style="background:#ef9a9a"></div>Червоний –<input type="text" data-color="#ef9a9a"></div>
+    <div class="legend-color"><div class="color-box" style="background:#81d4fa"></div>Світло-блакитний –<input type="text" data-color="#81d4fa"></div>
+  </div>
+
+  <div class="toolbar">
+    <button id="paintMode">Зафарбовування</button>
+    <button id="measureMode">Вимірювання</button>
+    <button id="stopMeasure">Завершити вимір</button>
+    <select id="colorPicker">
+      <option value="#ffcc80">Персиковий</option>
+      <option value="#90caf9">Блакитний</option>
+      <option value="#a5d6a7">Зелений</option>
+      <option value="#f48fb1">Рожевий</option>
+      <option value="#ffe082">Жовтий</option>
+      <option value="#ce93d8">Фіолетовий</option>
+      <option value="#ffab91">Помаранчевий</option>
+      <option value="#80cbc4">М’ятний</option>
+      <option value="#c5e1a5">Світло-зелений</option>
+      <option value="#b0bec5">Сірий</option>
+      <option value="#ef9a9a">Червоний</option>
+      <option value="#81d4fa">Світло-блакитний</option>
+    </select>
+    <input id="scenarioName" placeholder="Назва замальовки">
+    <button id="saveScenario">Зберегти</button>
+    <select id="loadScenario"></select>
+    <button id="loadScenarioBtn">Завантажити</button>
+    <span id="distance"></span>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script>
+    const map = L.map('map').setView([49.0, 31.4], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    let mode = 'paint';
+    const colorPicker = document.getElementById('colorPicker');
+    document.getElementById('paintMode').onclick = () => mode = 'paint';
+    document.getElementById('measureMode').onclick = () => mode = 'measure';
+    document.getElementById('stopMeasure').onclick = () => { measurePoints=[]; measureLayer.clearLayers(); distanceEl.textContent=''; mode='paint'; };
+
+    // Вимірювання
+    let measurePoints = [];
+    let measureLayer = L.layerGroup().addTo(map);
+    const distanceEl = document.getElementById('distance');
+    function updateDistance() {
+      if (measurePoints.length < 2) { distanceEl.textContent = ''; return; }
+      const line = turf.lineString(measurePoints.map(p => [p.lng, p.lat]));
+      const km = turf.length(line, { units: 'kilometers' });
+      distanceEl.textContent = `Дистанція: ${km.toFixed(2)} км`;
+    }
+    map.on('click', e => {
+      if (mode !== 'measure') return;
+      measurePoints.push(e.latlng);
+      measureLayer.clearLayers();
+      L.polyline(measurePoints, { color: '#1976d2', weight: 3 }).addTo(measureLayer);
+      measurePoints.forEach(p => L.circleMarker(p, { radius: 4, color: '#1976d2' }).addTo(measureLayer));
+      updateDistance();
+    });
+    map.on('dblclick', () => { if (mode==='measure'){ measurePoints=[]; measureLayer.clearLayers(); updateDistance(); } });
+
+    // --- Замальовки ---
+
+  const paintedState = {};
+  const paintedByColor = {};
+  const layerIndex = new Map();
+
+  function featureKey(feature) {
+  return feature.properties?.NAME_1 
+      || feature.properties?.NAME 
+      || feature.properties?.region 
+      || feature.properties?.rayon 
+      || feature.properties?.oblast;
+}
+
+function updateLegendAreas() {
+  const totals = {};
+  Object.entries(paintedByColor).forEach(([color, features]) => {
+    let sum = 0;
+    features.forEach(f => sum += f.properties.area);
+    totals[color] = sum;
+  });
+
+  document.querySelectorAll('.legend input').forEach(inp => {
+    const color = inp.dataset.color;
+    const km2 = totals[color] ? (totals[color] / 1e6).toFixed(2) : 0;
+
+    let span = inp.nextElementSibling;
+    if (!span || span.tagName !== 'SPAN') {
+      span = document.createElement('span');
+      span.style.marginLeft = '6px';
+      inp.insertAdjacentElement('afterend', span);
+    }
+    span.textContent = `(${km2} км²)`;
+  });
+}
+
+  function onEachFeature(feature, layer, weight=1) {
+    const key = featureKey(feature);
+    if (!key) { console.warn('Feature без ключа:', feature.properties); return; }
+
+    // кешуємо площу
+    if (!feature.properties.area) {
+      feature.properties.area = turf.area(feature.geometry);
+    }
+
+    // реєструємо шар
+    layerIndex.set(key, layer);
+
+    // початковий стиль
+    layer.setStyle({
+      color: '#555', weight,
+      fillColor: paintedState[key] || '#e0e0e0',
+      fillOpacity: paintedState[key] ? 0.6 : 0.4
+    });
+
+    // клік для замальовки
+    layer.on('click', () => {
+  if (mode !== 'paint') return;
+  const color = colorPicker.value;
+
+  if (paintedState[key] === color) {
+    // зняти замальовку
+    delete paintedState[key];
+    paintedByColor[color] = paintedByColor[color].filter(f => f !== feature);
+    layer.setStyle({
+      color: '#555', weight,
+      fillColor: '#e0e0e0',
+      fillOpacity: 0.4
+    });
+  } else {
+    // замалювати
+    paintedState[key] = color;
+    if (!paintedByColor[color]) paintedByColor[color] = [];
+    paintedByColor[color].push(feature);
+    layer.setStyle({
+      color: '#555', weight,
+      fillColor: color,
+      fillOpacity: 0.6
+    });
+  }
+
+  updateLegendAreas();
+});
+
+
+    layer.on('mouseover', () => layer.setStyle({ weight: weight+1 }));
+    layer.on('mouseout', () => layer.setStyle({ weight }));
+    if (feature.properties?.NAME_1 || feature.properties?.NAME) {
+      layer.bindTooltip(feature.properties.NAME_1 || feature.properties.NAME, { sticky: true });
+    }
+  }
+
+  // --- Завантаження GeoJSON ---
+  let layersReady = false;
+  let pendingScenarioToLoad = null;
+
+  Promise.all([
+    fetch('uao.json').then(r => r.json()).then(data => {
+      console.log('uao.json loaded', data);
+      L.geoJSON(data, { onEachFeature: (f,l) => onEachFeature(f,l,3) }).addTo(map);
+    }),
+    fetch('ua.json').then(r => r.json()).then(data => {
+      console.log('ua.json loaded', data);
+      L.geoJSON(data, { onEachFeature: (f,l) => onEachFeature(f,l,1) }).addTo(map);
+    })
+  ]).then(() => {
+    layersReady = true;
+    updateScenarioList();
+    console.log('layerIndex size:', layerIndex.size);
+    if (pendingScenarioToLoad) {
+      loadScenario(pendingScenarioToLoad);
+      pendingScenarioToLoad = null;
+    }
+  });
+
+
+    // --- Сценарії ---
+    const STORAGE_KEY = 'ukraine-map-scenarios';
+
+    function saveScenario() {
+      const name = document.getElementById('scenarioName').value.trim();
+      if (!name) { alert('Введіть назву замальовки'); return; }
+      const scenarios = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+      const explanations = {};
+      document.querySelectorAll('.legend input').forEach(inp => {
+        explanations[inp.dataset.color] = inp.value;
+      });
+
+      scenarios[name] = {
+        paintedState: paintedState,
+        explanations
+      };
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+      updateScenarioList();
+      alert(`Замальовку "${name}" збережено!`);
+    }
+
+    function loadScenario(name) {
+      const scenarios = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const s = scenarios[name];
+      if (!s) return;
+
+      // очистка
+      for (const k of Object.keys(paintedState)) delete paintedState[k];
+      for (const k of Object.keys(paintedByColor)) delete paintedByColor[k];
+
+      Object.assign(paintedState, s.paintedState);
+
+      document.querySelectorAll('.legend input').forEach(inp => {
+        inp.value = s.explanations[inp.dataset.color] || '';
+      });
+
+      // фарбуємо напряму по ключах
+      Object.entries(paintedState).forEach(([key, color]) => {
+        const layer = layerIndex.get(key);
+        if (!layer) return;
+        const weight = layer.options.weight || 1;
+        layer.setStyle({
+          color: '#555',
+          weight,
+          fillColor: color || '#e0e0e0',
+          fillOpacity: color ? 0.6 : 0.4
+        });
+        if (color) {
+          if (!paintedByColor[color]) paintedByColor[color] = [];
+          paintedByColor[color].push(layer.feature);
+        }
+      });
+
+      // решта у сірий
+      layerIndex.forEach((layer, key) => {
+        if (paintedState[key]) return;
+        const weight = layer.options.weight || 1;
+        layer.setStyle({
+          color: '#555',
+          weight,
+          fillColor: '#e0e0e0',
+          fillOpacity: 0.4
+        });
+      });
+
+      updateLegendAreas();
+      alert(`Замальовку "${name}" завантажено!`);
+    }
+
+    function updateScenarioList() {
+      const scenarios = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const select = document.getElementById('loadScenario');
+      select.innerHTML = '<option value="">-- виберіть замальовку --</option>';
+      Object.keys(scenarios).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    document.getElementById('saveScenario').onclick = saveScenario;
+    document.getElementById('loadScenarioBtn').onclick = () => {
+      const name = document.getElementById('loadScenario').value;
+      if (!name) return;
+      if (!layersReady) { pendingScenarioToLoad = name; return; }
+      loadScenario(name);
+    };
+  </script>
+</body>
+</html>

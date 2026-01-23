@@ -7,7 +7,6 @@
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
   <style>
-    /* Головний стиль */
     body {
       font-family: Arial, sans-serif;
       margin: 0; padding: 0;
@@ -18,12 +17,8 @@
       flex-direction: column;
       align-items: center;
     }
-    h1, h2 {
-      margin-top: 30px;
-      text-align: center;
-    }
+    h1 { margin-top: 30px; text-align: center; }
 
-    /* Контейнер */
     .dashboard {
       max-width: 1000px;
       width: 95%;
@@ -34,7 +29,6 @@
       box-shadow: 0 0 20px rgba(0,0,0,0.6);
     }
 
-    /* Фільтри */
     #filterBar {
       margin-bottom: 20px;
       padding: 10px;
@@ -58,21 +52,15 @@
       color: #ffffff;
       font-size: 0.9rem;
     }
-    #filterBar button:hover {
-      background-color: #003300;
-    }
+    #filterBar button:hover { background-color: #003300; }
 
-    /* Календар */
     #calendar {
       background: #ffffff;
       color: #000000;
       border-radius: 8px;
       padding: 10px;
     }
-    .fc-event {
-      cursor: pointer;
-      border-radius: 4px;
-    }
+    .fc-event { cursor: pointer; border-radius: 4px; }
 
     /* Меню візиту */
     #visitMenu {
@@ -86,15 +74,23 @@
       transition: opacity 0.2s ease, transform 0.2s ease;
       color: #fff;
     }
-    #visitMenu.show { opacity: 1; transform: translate(-50%, -40%) scale(1); pointer-events: auto; }
-    #visitMenu h4 { margin: 0 0 8px; }
-    #visitMenu .menu-actions { display: grid; gap: 8px; margin-top: 12px; }
+    #visitMenu.show {
+      display: block;
+      opacity: 1;
+      transform: translate(-50%, -40%) scale(1);
+      pointer-events: auto;
+    }
+    #visitMenu .visit-menu-actions {
+      margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;
+    }
     #visitMenu button {
-      width: 100%; padding: 8px;
+      flex: 1;
+      padding: 8px;
       border: none; border-radius: 6px;
       cursor: pointer; color: #fff;
     }
     .btn-start { background: #4caf50; }
+    .btn-finish { background: #4caf50; }
     .btn-cancel { background: #f44336; }
     .btn-reschedule { background: #2196f3; }
     .btn-edit { background: #ff9800; }
@@ -114,60 +110,10 @@
       margin: 5% auto;
       padding: 20px;
       border-radius: 8px;
-      width: 90%;
-      max-width: 900px;
+      width: 90%; max-width: 900px;
       color: #fff;
     }
-    .close {
-      float: right;
-      font-size: 24px;
-      cursor: pointer;
-    }
-
-    /* Вкладки */
-    .tabs { display: flex; flex-direction: column; }
-    .tab-buttons {
-      display: flex;
-      border-bottom: 1px solid #ccc;
-      margin-bottom: 12px;
-    }
-    .tab-buttons button {
-      flex: 1;
-      padding: 10px;
-      background: #004d00;
-      border: none;
-      cursor: pointer;
-      font-weight: bold;
-      color: #fff;
-    }
-    .tab-buttons button.active {
-      background: #2196f3;
-    }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .tab-content label {
-      display: block;
-      margin-bottom: 10px;
-      font-weight: bold;
-    }
-    .tab-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      background: #fff;
-      color: #000;
-    }
-    .tab-content th, .tab-content td {
-      border: 1px solid #ccc;
-      padding: 6px;
-      text-align: center;
-    }
-    .tab-content th { background: #eee; }
-    .tab-content input {
-      width: 90%;
-      padding: 4px;
-      text-align: center;
-    }
+    .close { float: right; font-size: 24px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -175,7 +121,6 @@
   <h1>📅 Календар візитів</h1>
 
   <div class="dashboard">
-    <!-- Фільтри -->
     <div id="filterBar">
       <label><input type="checkbox" id="filterPlanned" checked> Заплановано</label>
       <label><input type="checkbox" id="filterInProgress" checked> В процесі</label>
@@ -185,20 +130,18 @@
       <button onclick="rerenderCalendar()">🔄 Оновити</button>
       <a href="../labcards/labs.html"><button type="button">🏥 Перейти до лабораторій</button></a>
     </div>
-
-    <!-- Календар -->
     <div id="calendar"></div>
   </div>
 
-  <!-- Меню дій -->
+  <!-- Меню візиту -->
   <div id="visitMenu">
-    <h4 id="visitMenuTitle">Меню візиту</h4>
     <div id="visitMenuInfo"></div>
-    <div class="menu-actions">
-      <button class="btn-start">Розпочати</button>
-      <button class="btn-cancel">Відмінити</button>
-      <button class="btn-reschedule">Перенести</button>
-      <button class="btn-edit">Редагувати картку</button>
+    <div class="visit-menu-actions">
+      <button class="btn-start">▶️ Почати</button>
+      <button class="btn-finish">✅ Завершити</button>
+      <button class="btn-cancel">❌ Скасувати</button>
+      <button class="btn-reschedule">📅 Перенести</button>
+      <button class="btn-edit">✏️ Редагувати лабораторію</button>
       <button class="btn-close" onclick="hideVisitMenu()">Закрити</button>
     </div>
   </div>
@@ -213,7 +156,6 @@
     </div>
   </div>
 
-  <!-- Підключення логіки -->
   <script src="../shared/visits.js"></script>
   <script src="../shared/calendar.js"></script>
 </body>
