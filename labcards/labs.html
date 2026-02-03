@@ -3,11 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Список лабораторій</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="logistics.js"></script> <!-- твій файл -->  
+  <title>📋 Список лабораторій</title>
 
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-pip/leaflet-pip.min.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+  <!-- Leaflet Draw -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css"/>
+  <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+
+  <!-- XLSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Стилі -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -37,7 +54,24 @@
       border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-    .lab-actions { margin-top: 8px; }
+    .lab-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .lab-actions button {
+      flex: 1;
+      padding: 6px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.3s ease;
+    }
+    .lab-actions button:nth-child(1) { background: #009933; color: #fff; } /* редагувати */
+    .lab-actions button:nth-child(2) { background: #cc0000; color: #fff; } /* видалити */
+    .lab-actions button:nth-child(3) { background: #0066cc; color: #fff; } /* створити візит */
+    .lab-actions button:hover { opacity: 0.85; }
     button {
       margin: 4px;
       padding: 8px 12px;
@@ -48,11 +82,21 @@
       color: #fff;
     }
     button:hover { background-color: #003300; }
-    input, select {
+    input{
       width: 96%;
       padding: 6px;
       border-radius: 4px;
       border: none;
+    }
+    select {
+      width: 100%;
+      padding: 6px;
+      border-radius: 4px;
+      border: none;
+    }
+    .hrefs {
+      text-align: center;
+      margin-top: 10px;
     }
     #filters {
       display: flex;
@@ -76,63 +120,39 @@
     }
     #pagination { margin-top: 20px; text-align: center; }
     #pagination button { margin: 4px; }
-#purchasesTable {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-#purchasesTable th,
-#purchasesTable td {
-  border: 1px solid white;   /* білі лінії */
-  padding: 8px;
-  text-align: left;
-}
-
-#purchasesTable th {
-  background-color: #333;    /* темний фон для заголовків */
-  color: white;
-}
-
-#purchasesTable tr:hover {
-  background-color: #45ff8391; /* підсвічування рядків при наведенні */
-} 
-.lab-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.lab-actions button {
-  flex: 1;
-  padding: 6px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.3s ease;
-}
-
-.lab-actions button:nth-child(1) { background: #009933; color: #fff; } /* редагувати */
-.lab-actions button:nth-child(2) { background: #cc0000; color: #fff; } /* видалити */
-.lab-actions button:nth-child(3) { background: #0066cc ; color: #fff; } /* створити візит */
-
-.lab-actions button:hover { opacity: 0.85; }
-
+    #purchasesTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #purchasesTable th,
+    #purchasesTable td {
+      border: 1px solid white;
+      padding: 8px;
+      text-align: left;
+    }
+    #purchasesTable th {
+      background-color: #333;
+      color: white;
+    }
+    #purchasesTable tr:hover {
+      background-color: #45ff8391;
+    }
   </style>
 </head>
 <body>
-  
   <img src="../logo.svg" alt="logo" width="220">
   <h1 style="text-align: center;">📋 Список лабораторій</h1>
 
   <!-- Фільтри -->
   <section id="filters">
     <div class="filters-row">
-      <label>Контрагент:
-        <input type="text" id="filterPartner" list="partnerOptions">
-        <datalist id="partnerOptions"></datalist>
+     <label>Контактна особа (Контрагент):
+      <input type="text" id="contractor" placeholder="Прізвище та ім’я">
+        <datalist id="contractor"></datalist>
       </label>
-      <span id="managerFilterContainer"></span>
+      <label>
+      <div id="managerFilterContainer"></div>
+      </label>  
       <label>Область: 
         <input type="text" id="filterRegion" list="regionOptions">
         <datalist id="regionOptions"></datalist>
@@ -157,20 +177,21 @@
         <input type="text" id="filterEdrpou" list="edrpouOptions">
         <datalist id="edrpouOptions"></datalist>
       </label>
-    </div>
-    <div>
-      <label>Прилади: 
+      <label>Лабраторії: 
         <select id="filterDevices"> 
           <option value="all">Усі</option> 
           <option value="with">З приладами</option> 
           <option value="without">Без приладів</option>
         </select>
       </label>
+    </div>
+    <div class="hrefs">
       <button type="button" onclick="applyFilters()">🔍 Фільтрувати</button>
       <button type="button" onclick="resetFilters()">♻️ Скинути</button>
-      <button onclick="exportToExcel()">⬇️ Експорт в Excel</button>
+      <button onclick="exportLabsToExcel()">Експорт лабораторій</button>
       <a href="../calendar/calendar.html"><button>📅 До календаря</button></a>
-      <button onclick="createNewLab()">➕ Додати лабораторію</button>
+      <button onclick="generateAllLabVisits()">📅 Згенерувати візити</button>
+      <button type="button" onclick="createNewLab()">➕ Створити лабораторію</button>
       <a href="../index.html"><button>🏠 Назад</button></a>
     </div>
   </section>
@@ -181,522 +202,69 @@
   <!-- Пагінація -->
   <div id="pagination"></div>
 
-<!-- Модалка створення візиту -->
-<div id="createVisitModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); 
-     background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); 
-     padding:20px; z-index:1000; width:300px;">
-  <span class="close" onclick="closeCreateVisitModal()" 
-        style="float:right; cursor:pointer; font-size:20px;">&times;</span>
-  <h3>Створення візиту</h3>
-  <label>Дата: <input type="date" id="visitDate"></label><br><br>
-  <label>Час: <input type="time" id="visitTime"></label><br><br>
-  <button onclick="confirmCreateVisit()">✅ Створити</button>
-  <button onclick="closeCreateVisitModal()">❌ Скасувати</button>
-</div>
-
-
-  <!-- Кнопки -->
-  <div>
-    <button onclick="createNewLab()">➕ Додати лабораторію</button>
-    <a href="../index.html"><button>🏠 Назад</button></a>
+  <!-- Модалка створення візиту -->
+  <div id="createVisitModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); 
+       background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); 
+       padding:20px; z-index:1000; width:300px;">
+    <span class="close" onclick="closeCreateVisitModal()" 
+          style="float:right; cursor:pointer; font-size:20px;">&times;</span>
+    <h3>Створення візиту</h3>
+    <label>Дата: <input type="date" id="visitDate"></label><br><br>
+    <label>Час: <input type="time" id="visitTime"></label><br><br>
+    <button onclick="confirmCreateVisit()">✅ Створити</button>
+    <button onclick="closeCreateVisitModal()">❌ Скасувати</button>
   </div>
 
-<!-- Контейнер для мапи -->
-<div id="map" style="width:95%; height:500px; margin:20px auto; border-radius:12px;"></div>
+  <!-- Контейнер для мапи -->
+  <div id="map" style="width:95%; height:500px; margin:20px auto; border-radius:12px;"></div>
 
-<!-- Модальне вікно -->
-<div id="mapModal" style="display:none; position:fixed; top:10%; left:10%; width:80%; height:70%; background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); overflow:auto; padding:20px; z-index:1000;">
-  <h2>Лабораторії у виділеній зоні</h2>
-  <table id="modalTable" border="1" style="width:100%; border-collapse:collapse;">
-    <thead>
-      <tr>
-      <th>Контрагент</th><th>Місто</th><th>ЛПЗ</th><th>ЄДРПОУ</th><th>Менеджер</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  <button onclick="closeModal()">Закрити</button>
-</div>
-<div id="purchasesModal" style="display:none;">
-  <h2>Закупівлі за останні 90 днів</h2>
-  <table id="purchasesTable">
-    <thead>
-      <tr>
-        <th>Лабораторія</th>
-        <th>Предмет</th>
-        <th>Кількість</th>
-        <th>Дата</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  <button onclick="downloadExcel()">⬇️ Викачати в Excel</button>
-  <button onclick="closePurchasesModal()">Закрити</button>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css"/>
-<script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
-
-
-<script>
-let labsData = [];
-let filteredLabs = [];
-let currentPage = 1;
-const pageSize = 25;
-
-let map;
-let markersLayer;
-let currentLabId = null;
-
-// ==========================
-// Модалка створення візиту
-// ==========================
-function openCreateVisitModal(labId) {
-  window.currentLabId = labId;
-  document.getElementById("createVisitModal").style.display = "block";
-}
-
-function closeCreateVisitModal() {
-  document.getElementById("createVisitModal").style.display = "none";
-}
-
-async function confirmCreateVisit() {
-  const token = localStorage.getItem("token");
-  const manager = localStorage.getItem("userLogin") || "Невідомо";
-
-  const date = document.getElementById("visitDate").value;
-  const time = document.getElementById("visitTime").value;
-
-  if (!date || !time) {
-    alert("❌ Виберіть дату та час");
-    return;
-  }
-
-  const fullDateTime = new Date(`${date}T${time}`);
-
-  const newVisit = {
-    labId: window.currentLabId,
-    date: fullDateTime.toISOString(), // відправляємо ISO-рядок
-    manager,
-    status: "planned",
-    notes: ""
-  };
-
-  try {
-    const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(newVisit)
-    });
-
-    if (res.ok) {
-      alert("✅ Візит створено!");
-      closeCreateVisitModal();
-      window.location.href = "../calendar/calendar.html"; // перенаправлення до календаря
-    } else {
-      const err = await res.json();
-      alert("❌ Помилка при створенні візиту: " + (err.error || res.status));
-    }
-  } catch (e) {
-    alert("❌ Помилка з'єднання з сервером");
-  }
-}
-
-// ==========================
-// Мапа та закупівлі
-// ==========================
-function initMap() {
-  if (map) return;
-  map = L.map('map').setView([50.45, 30.52], 7);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
-
-  markersLayer = L.layerGroup().addTo(map);
-  const drawnItems = new L.FeatureGroup().addTo(map);
-
-  const drawControl = new L.Control.Draw({
-    draw: {
-      polygon: true,
-      rectangle: true,
-      circle: false,
-      marker: false,
-      polyline: false
-    },
-    edit: { featureGroup: drawnItems }
-  });
-  map.addControl(drawControl);
-
-  map.on(L.Draw.Event.CREATED, async function (e) {
-    const layer = e.layer;
-    drawnItems.addLayer(layer);
-    const bounds = layer.getBounds();
-    const labsInArea = filterLabsByPolygon(bounds);
-    const purchases = await fetchPurchases(labsInArea.map(l => l._id));
-    console.log("🧾 Закупівлі:", purchases);
-    openPurchasesModal(purchases);
-  });
-}
-
-function filterLabsByPolygon(bounds) {
-  return labsData.filter(lab => {
-    if (!lab.lat || !lab.lng) return false;
-    const point = L.latLng(lab.lat, lab.lng);
-    return bounds.contains(point);
-  });
-}
-
-async function fetchPurchases(labIds) {
-  const token = localStorage.getItem("token");
-  const res = await fetch("https://nodejs-production-7176.up.railway.app/purchases", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
-    body: JSON.stringify({ labIds, days: 90 })
-  });
-
-  if (!res.ok) {
-    console.error("❌ Запит не успішний:", res.status);
-    return [];
-  }
-
-  return await res.json();
-}
-
-function openPurchasesModal(purchases) {
-  const tbody = document.querySelector("#purchasesTable tbody");
-  if (!tbody) return;
-
-  tbody.innerHTML = "";
-  purchases.forEach(p => {
-    const row = `
-      <tr>
-        <td>${p.labName || "—"}</td>
-        <td>${p.item || "—"}</td>
-        <td>${p.amount || "—"}</td>
-        <td>${p.date !== "—" ? new Date(p.date).toLocaleDateString() : "—"}</td>
-      </tr>
-    `;
-    tbody.innerHTML += row;
-  });
-
-  document.getElementById("purchasesModal").style.display = "block";
-}
-
-function closePurchasesModal() {
-  document.getElementById("purchasesModal").style.display = "none";
-}
-
-// 2. Оновлення мапи
-function updateMap(data) {
-  if (!map) initMap();
-  markersLayer.clearLayers();
-
-  for (const lab of data) {
-    if (!lab.lat || !lab.lng) continue;
-    const marker = L.marker([lab.lat, lab.lng]).addTo(markersLayer);
-    marker.bindPopup(`
-      <b>${lab.partner || "—"}</b><br>
-      ${lab.city || "—"}<br>
-      ЛПЗ: ${lab.institution || "—"}<br>
-      ЄДРПОУ: ${lab.edrpou || "—"}
-      <button onclick="editLab('${lab.edrpou}')">✏️ Редагувати</button>
-    `);
-  }
-}
-
-// 3. Завантаження лабораторій
-async function fetchLabs() {
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch("https://nodejs-production-7176.up.railway.app/labs", {
-      headers: { "Authorization": "Bearer " + token }
-    });
-    labsData = await res.json();
-    filteredLabs = labsData;
-
-    showManagerFilterIfAllowed();
-    populateFilterOptions(labsData);
-    renderLabs(filteredLabs);
-    updateMap(filteredLabs);
-  } catch (err) {
-    document.getElementById("labsContainer").innerHTML =
-      "<p>⚠️ Не вдалося отримати лабораторії: " + err.message + "</p>";
-  }
-}
-
-// 4. Рендер карток
-function renderLabs(data = filteredLabs) {
-  const container = document.getElementById("labsContainer");
-  container.innerHTML = "";
-
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const labsPage = data.slice(start, end);
-
-  labsPage.forEach(lab => {
-    const devicesList = (lab.devices || [])
-      .map(d => d.category || d.device)
-      .filter(Boolean)
-      .join(", ");
-
-    const card = document.createElement("div");
-    card.className = "lab-card";
-    card.innerHTML = `
-  <h3>${lab.partner || "—"}</h3>
-  <p><b>Менеджер:</b> ${lab.manager || "—"}</p>
-  <p><b>Регіон:</b> ${lab.region || "—"}</p>
-  <p><b>Місто:</b> ${lab.city || "—"}</p>
-  <p><b>ЄДРПОУ:</b> ${lab.edrpou || "—"}</p>
-  <p><b>Прилади:</b> ${devicesList || "—"}</p>
-  <div class="lab-actions">
-    <button onclick="editLab('${lab.edrpou}')">✏️ Редагувати</button>
-    <button onclick="deleteLab('${lab._id}')">🗑️ Видалити</button>
-    <button onclick="openCreateVisitModal('${lab._id}')">📅 Створити візит</button>
+  
+  <!-- Модальне вікно для лабораторій у зоні -->
+  <div id="mapModal" style="display:none; position:fixed; top:10%; left:10%; width:80%; height:70%; 
+       background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); 
+       overflow:auto; padding:20px; z-index:1000;">
+    <h2>Лабораторії у виділеній зоні</h2>
+    <table id="modalTable" border="1" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Контрагент</th>
+          <th>Місто</th>
+          <th>ЛПЗ</th>
+          <th>ЄДРПОУ</th>
+          <th>Менеджер</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button onclick="closeModal()">Закрити</button>
   </div>
-`;
 
-    container.appendChild(card);
-  });
+  <!-- Модальне вікно закупівель -->
+  <div id="purchasesModal" style="display:none; position:fixed; top:10%; left:10%; width:80%; height:70%; 
+       background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); 
+       overflow:auto; padding:20px; z-index:1000;">
+    <button onclick="exportPurchasesToExcel()">Експорт закупівель</button>
+    <button onclick="closePurchasesModal()">Закрити</button>
+      <h2>Закупівлі за останні 90 днів</h2>
+    <div id="purchasesSummary" style="margin-top:15px; font-weight:bold;"></div>
+    <table id="purchasesTable">
+  <thead>
+    <tr>
+      <th onclick="sortTable(0)">Лабораторія <span class="sort-icon"></span></th>
+      <th onclick="sortTable(1)">Предмет <span class="sort-icon"></span></th>
+      <th onclick="sortTable(2)">Кількість <span class="sort-icon"></span></th>
+      <th onclick="sortTable(3)">Дата <span class="sort-icon"></span></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-  renderPagination(data);
-}
+    </div>
 
-function editLab(labEdrpou) {
-  sessionStorage.setItem("editLabEdrpou", labEdrpou);
-  window.location.href = "./labcard.html";
-}
-
-
-async function deleteLab(labId) {
-  if (!confirm("Ви впевнені, що хочете видалити лабораторію?")) return;
-
-  const token = localStorage.getItem("token");
-  const res = await fetch(`https://nodejs-production-7176.up.railway.app/labs/${labId}`, {
-    method: "DELETE",
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  if (res.ok) {
-    alert("✅ Лабораторію видалено");
-    location.reload();
-  } else {
-    alert("❌ Помилка при видаленні");
-  }
-}
-
-
-// 5. Пагінація
-function renderPagination(data = filteredLabs) {
-  const totalPages = Math.ceil(data.length / pageSize);
-  const pagination = document.getElementById("pagination");
-  pagination.innerHTML = "";
-
-  for (let i = 1; i <= totalPages; i++) {
-    const btn = document.createElement("button");
-    btn.textContent = i;
-    if (i === currentPage) btn.style.backgroundColor = "#003300";
-    btn.onclick = () => { currentPage = i; renderLabs(data); };
-    pagination.appendChild(btn);
-  }
-}
-
-// 6. Фільтрація
-function applyFilters() {
-  let filtered = labsData;
-
-  const getVal = id => document.getElementById(id)?.value;
-
-  const filters = {
-    partner: getVal("filterPartner"),
-    region: getVal("filterRegion"),
-    city: getVal("filterCity"),
-    institution: getVal("filterInstitution"),
-    edrpou: getVal("filterEdrpou"),
-    manager: getVal("filterManager"),
-    deviceCategory: getVal("filterDevice"),
-    deviceFilter: getVal("filterDevices")
-  };
-
-  if (filters.partner) filtered = filtered.filter(l => l.partner === filters.partner);
-  if (filters.region) filtered = filtered.filter(l => l.region === filters.region);
-  if (filters.city) filtered = filtered.filter(l => l.city === filters.city);
-  if (filters.institution) filtered = filtered.filter(l => l.institution === filters.institution);
-  if (filters.edrpou) filtered = filtered.filter(l => l.edrpou === filters.edrpou);
-  if (filters.manager) filtered = filtered.filter(l => l.manager === filters.manager);
-  if (filters.deviceCategory) {
-    filtered = filtered.filter(l =>
-      (l.devices || []).some(d => d.category === filters.deviceCategory || d.device === filters.deviceCategory)
-    );
-  }
-  if (filters.deviceFilter === "with") {
-    filtered = filtered.filter(l => l.devices && l.devices.length > 0);
-  } else if (filters.deviceFilter === "without") {
-    filtered = filtered.filter(l => !l.devices || l.devices.length === 0);
-  }
-
-  filteredLabs = filtered;
-  currentPage = 1;
-  renderLabs(filteredLabs);
-  populateFilterOptions(filteredLabs);
-  updateMap(filteredLabs);
-
-  if (filteredLabs.length === 1) {
-    const lab = filteredLabs[0];
-    document.getElementById("filterPartner").value = lab.partner || "";
-    document.getElementById("filterRegion").value = lab.region || "";
-    document.getElementById("filterCity").value = lab.city || "";
-    document.getElementById("filterInstitution").value = lab.institution || "";
-    document.getElementById("filterEdrpou").value = lab.edrpou || "";
-    if (document.getElementById("filterManager")) {
-      document.getElementById("filterManager").value = lab.manager || "";
-    }
-  }
-}
-
-// 7. Підказки
-function populateFilterOptions(source = labsData) {
-  const setOptions = (id, values) => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = [...new Set(values.filter(Boolean))]
-      .map(v => `<option value="${v}">`).join("");
-  };
-
-  setOptions("partnerOptions", source.map(l => l.partner));
-  setOptions("regionOptions", source.map(l => l.region));
-  setOptions("cityOptions", source.map(l => l.city));
-  setOptions("institutionOptions", source.map(l => l.institution));
-  setOptions("edrpouOptions", source.map(l => l.edrpou));
-  setOptions("managerOptions", source.map(l => l.manager));
-
-  const deviceOptions = document.getElementById("deviceOptions");
-  if (deviceOptions) {
-    deviceOptions.innerHTML = "";
-    const uniqueDevices = new Set();
-    source.forEach(lab => (lab.devices || []).forEach(d => d.category && uniqueDevices.add(d.category)));
-    uniqueDevices.forEach(val => {
-      const option = document.createElement("option");
-      option.value = val;
-      deviceOptions.appendChild(option);
-    });
-  }
-
-  const kpOptions = document.getElementById("kpOptions");
-  if (kpOptions) {
-    kpOptions.innerHTML = "";
-    const uniqueKp = new Set();
-    source.forEach(lab => (lab.devices || []).forEach(d => {
-      if (d.kp) uniqueKp.add(d.kp);
-    }));
-    uniqueKp.forEach(val => {
-      const option = document.createElement("option");
-      option.value = val;
-      kpOptions.appendChild(option);
-    });
-  }
-}
-
-// 8. Скидання фільтрів
-function resetFilters() {
-  document.querySelectorAll("#filters input, #filters select").forEach(el => el.value = "");
-  document.getElementById("filterDevices").value = "all";
-  filteredLabs = labsData;
-  currentPage = 1;
-  renderLabs(filteredLabs);
-  populateFilterOptions(labsData);
-  updateMap(filteredLabs);
-}
-
-// 9. Менеджер-фільтр
-function showManagerFilterIfAllowed() {
-  const token = localStorage.getItem("token");
-  if (!token) return;
-
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if (payload.role === "admin" || payload.role === "manager") {
-      const container = document.getElementById("managerFilterContainer");
-      container.innerHTML = `
-        <label>Менеджер:
-          <input type="text" id="filterManager" list="managerOptions">
-          <datalist id="managerOptions"></datalist>
-        </label>
-      `;
-      populateFilterOptions(labsData);
-    } else {
-      const container = document.getElementById("managerFilterContainer");
-      if (container) container.innerHTML = "";
-    }
-  } catch (err) {
-    console.error("❌ Помилка розбору токена:", err);
-  }
-}
-
-// 10. Модальне вікно (опційно)
-function openModal(labs) {
-  const tbody = document.querySelector("#modalTable tbody");
-  tbody.innerHTML = "";
-  labs.forEach(lab => {
-    const row = `
-      <tr>
-        <td>${lab.partner || "—"}</td>
-        <td>${lab.city || "—"}</td>
-        <td>${lab.institution || "—"}</td>
-        <td>${lab.edrpou || "—"}</td>
-        <td>${lab.manager || "—"}</td>
-      </tr>
-    `;
-    tbody.innerHTML += row;
-  });
-  document.getElementById("mapModal").style.display = "block";
-}
-
-function closeModal() {
-  document.getElementById("mapModal").style.display = "none";
-}
-
-// 11. Ініціалізація при завантаженні сторінки
-document.addEventListener("DOMContentLoaded", () => {
-  initMap();
-  fetchLabs();
-
-  // Автоматичне застосування фільтрів при зміні будь-якого поля
-  document.querySelectorAll("#filters input, #filters select").forEach(el => {
-    el.addEventListener("change", applyFilters);
-  });
-
-  // Кнопка скидання фільтрів
-  const resetBtn = document.querySelector("button[onclick='resetFilters()']");
-  if (resetBtn) resetBtn.addEventListener("click", resetFilters);
-});
-
-function downloadExcel() {
-  const table = document.getElementById("purchasesTable");
-  if (!table) {
-    alert("❌ Таблиця не знайдена");
-    return;
-  }
-
-  // Конвертуємо HTML-таблицю у SheetJS-об'єкт
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.table_to_sheet(table);
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Закупівлі");
-
-  // Генеруємо файл Excel
- XLSX.writeFile(workbook, `zakupivli_${new Date().toISOString().split("T")[0]}.xlsx`);
-}
-
-</script>
-
-  </body>
+  <!-- Підключення спільних скриптів -->
+  <script src="../shared/cache.js"></script>
+  <script src="logistics.js"></script>
+  <script src="labcards.js"></script>
+</body>
 </html>
+

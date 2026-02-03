@@ -57,12 +57,14 @@
     <h2>👋 Ласкаво просимо!</h2>
     <p id="userRole"></p>
     <div class="menu">
+      <button type="button" onclick="fetchLabsAndVisits()">🌅 Почати день</button>
       <button onclick="goToCalendar()">📅 Календар</button>
       <button onclick="goToLabs()">🧪 Перелік лабораторій</button>
-      <button onclick="goToLabCard()">➕ Створити картку лабораторії</button>
+      <button type="button" onclick="createNewLab()">➕ Створити лабораторію</button>
       <button onclick="goToReport()">📊 Переглянути звіти</button>
       <button onclick="logout()">🚪 Вийти</button>
-    </div>
+      <button type="button" onclick="pushLabsAndVisits()">🌇 Завершити день</button>
+  </div>
   </div>
 <img src="./ivd.png" alt="logo" width="560">
   <script>
@@ -162,6 +164,214 @@ window.onload = async () => {
     showLogin();
     document.getElementById("result").innerHTML = `<p>🚪 Ви вийшли із системи</p>`;
   }
+
+
+// === db.js ===
+// Простий модуль для роботи з IndexedDB
+
+
+// утиліта для отримання останніх даних по реагенту
+function getLatestReagentsInfo(allOrders) {
+  const latestInfo = {};
+  for (const order of allOrders) {
+    const { reagentName, lastOrderDate, lastOrderCount } = order;
+    if (
+      !latestInfo[reagentName] ||
+      new Date(lastOrderDate) > new Date(latestInfo[reagentName].lastOrderDate)
+    ) {
+      latestInfo[reagentName] = { lastOrderDate, lastOrderCount };
+    }
+  }
+  return latestInfo;
+}
+
+// трансформація з бекенду → уніфікований формат
+function transformLabFromBackend(lab) {
+  return {
+    ...lab,
+    devices: (lab.devices || []).map(d => {
+      const reagentsOrders = (d.reagents || []).map(r => ({
+        reagentName: r.name,
+        lastOrderDate: r.date,
+        lastOrderCount: r.quantity
+      }));
+      const reagentsInfo = getLatestReagentsInfo(reagentsOrders);
+
+      return {
+        ...d,
+        reagentsOrders,
+        reagentsInfo,
+        analyses: d.analyses || {}
+      };
+    })
+  };
+}
+
+
+
+const DB_NAME = "labsDB";
+const DB_VERSION = 1;
+const LABS_STORE = "labs";
+const VISITS_STORE = "visits";
+
+// Ініціалізація бази
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(LABS_STORE)) {
+        db.createObjectStore(LABS_STORE, { keyPath: "_id" });
+      }
+      if (!db.objectStoreNames.contains(VISITS_STORE)) {
+        db.createObjectStore(VISITS_STORE, { keyPath: "_id" });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Зберегти масив у IndexedDB
+async function saveToDB(storeName, dataArray) {
+  const db = await openDB();
+  const tx = db.transaction(storeName, "readwrite");
+  const store = tx.objectStore(storeName);
+
+  dataArray.forEach(item => store.put(item));
+
+  return tx.complete;
+}
+
+// Прочитати всі дані з IndexedDB
+async function getAllFromDB(storeName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const request = store.getAll();
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Очистити IndexedDB
+async function clearDB(storeName) {
+  const db = await openDB();
+  const tx = db.transaction(storeName, "readwrite");
+  tx.objectStore(storeName).clear();
+  return tx.complete;
+}
+// Підтягнути дані з бекенду і зберегти в IndexedDB
+async function fetchLabsAndVisits() {
+  const token = localStorage.getItem("token");
+  try {
+    const [labsRes, visitsRes] = await Promise.all([
+      fetch("https://nodejs-production-7176.up.railway.app/labs", {
+        headers: { "Authorization": "Bearer " + token }
+      }),
+      fetch("https://nodejs-production-7176.up.railway.app/visits", {
+        headers: { "Authorization": "Bearer " + token }
+      })
+    ]);
+
+    if (!labsRes.ok || !visitsRes.ok) {
+      throw new Error("❌ Не вдалося отримати дані з бекенду");
+    }
+
+    const labsRaw = await labsRes.json();
+    const visitsRaw = await visitsRes.json();
+
+    // трансформуємо лабораторії у внутрішній формат
+    const labs = labsRaw.map(transformLabFromBackend);
+
+    // зберігаємо в IndexedDB
+    await clearDB(LABS_STORE);
+    await clearDB(VISITS_STORE);
+    await saveToDB(LABS_STORE, labs);
+    await saveToDB(VISITS_STORE, visitsRaw);
+
+    alert(`✅ Дані підтягнуто: ${labs.length} лабораторій, ${visitsRaw.length} візитів`);
+    return { labs, visits: visitsRaw };
+  } catch (err) {
+    console.error("❌ Помилка при fetch:", err);
+    alert("⚠️ Не вдалося підтягнути дані. Перевірте консоль.");
+    return { labs: [], visits: [] };
+  }
+}
+
+// Відправити локальні зміни на бекенд
+async function pushLabsAndVisits() {
+  const token = localStorage.getItem("token");
+  try {
+    const labsUnified = await getAllFromDB(LABS_STORE);
+    const visits = await getAllFromDB(VISITS_STORE);
+
+    // трансформуємо назад у формат бекенду
+    const labsForBackend = labsUnified.map(transformLabToBackend);
+
+    await Promise.all([
+      fetch("https://nodejs-production-7176.up.railway.app/labs", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(labsForBackend)
+      }),
+      fetch("https://nodejs-production-7176.up.railway.app/visits", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(visits)
+      })
+    ]);
+
+    alert("🌇 Зміни синхронізовано з бекендом!");
+  } catch (err) {
+    console.error("❌ Помилка при push:", err);
+    alert("⚠️ Не вдалося відправити зміни. Перевірте консоль.");
+  }
+}
+// === resetAndFetchDB.js ===
+// Очистити IndexedDB і підтягнути нові дані
+
+async function resetAndFetchDB() {
+  try {
+    // 1. Очистка IndexedDB
+    await clearDB("labs");
+    await clearDB("visits");
+    console.log("🧹 IndexedDB очищено");
+
+    // 2. Підтягування нових даних
+    const { labs, visits } = await fetchLabsAndVisits();
+
+    console.log("✅ Нові дані підтягнуто:", labs.length, "лабораторій,", visits.length, "візитів");
+    return { labs, visits };
+  } catch (err) {
+    console.error("❌ Помилка у resetAndFetchDB:", err);
+    alert("⚠️ Не вдалося оновити IndexedDB. Перевірте консоль.");
+    return { labs: [], visits: [] };
+  }
+}
+
+
+function createNewLab() {
+  // очищаємо маркер поточної лабораторії
+  localStorage.removeItem("currentLabEdrpou");
+
+  // переходимо на сторінку картки
+  window.location.href = "labcard.html";
+}
+// === reset.js ===
+// Очистити кеш і підтягнути нові дані
+
+
 </script>
 
 </body>

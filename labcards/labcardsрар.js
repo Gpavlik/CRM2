@@ -1599,3 +1599,370 @@ window.toISODateLocal = toISODateLocal;
 window.nextWorkingDay = nextWorkingDay;
 window.preferTueThu = preferTueThu; 
 window.renderVisitPlanner = renderVisitPlanner;
+
+
+
+
+
+
+
+
+<!-- Тільки після цього підключай свій код -->
+
+<script>
+let labsData = [];
+let filteredLabs = [];
+let currentPage = 1;
+const pageSize = 25;
+
+let map;
+let markersLayer;
+let currentLabId = null;
+
+// ==========================
+// Модалка створення візиту
+// ==========================
+function openCreateVisitModal(labId) {
+  window.currentLabId = labId;
+  document.getElementById("createVisitModal").style.display = "block";
+}
+
+function closeCreateVisitModal() {
+  document.getElementById("createVisitModal").style.display = "none";
+}
+
+function confirmCreateVisit() {
+  const manager = localStorage.getItem("userLogin") || "Невідомо";
+
+  const date = document.getElementById("visitDate").value;
+  const time = document.getElementById("visitTime").value;
+
+  if (!date || !time) {
+    alert("❌ Виберіть дату та час");
+    return;
+  }
+
+  const fullDateTime = new Date(`${date}T${time}`);
+
+  const newVisit = {
+    id: Date.now(), // тимчасовий ID
+    labId: window.currentLabId,
+    date: fullDateTime.toISOString(),
+    manager,
+    status: "planned",
+    notes: ""
+  };
+
+  // додаємо у кеш
+  const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+  visits.push(newVisit);
+  localStorage.setItem("visits", JSON.stringify(visits));
+  window.visitsCache = visits;
+
+  alert("✅ Візит додано у кеш!");
+  closeCreateVisitModal();
+  window.location.href = "../calendar/calendar.html"; // перенаправлення до календаря
+}
+
+// ==========================
+// Мапа та закупівлі
+// ==========================
+function initMap() {
+  if (map) return;
+  map = L.map('map').setView([50.45, 30.52], 7);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  markersLayer = L.layerGroup().addTo(map);
+  const drawnItems = new L.FeatureGroup().addTo(map);
+
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polygon: true,
+      rectangle: true,
+      circle: false,
+      marker: false,
+      polyline: false
+    },
+    edit: { featureGroup: drawnItems }
+  });
+  map.addControl(drawControl);
+
+  map.on(L.Draw.Event.CREATED, function (e) {
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+    const bounds = layer.getBounds();
+    const labsInArea = filterLabsByPolygon(bounds);
+    const purchases = fetchPurchases(labsInArea.map(l => l._id));
+    console.log("🧾 Закупівлі:", purchases);
+    openPurchasesModal(purchases);
+  });
+}
+
+function filterLabsByPolygon(bounds) {
+  return labsData.filter(lab => {
+    if (!lab.lat || !lab.lng) return false;
+    const point = L.latLng(lab.lat, lab.lng);
+    return bounds.contains(point);
+  });
+}
+
+function fetchPurchases(labIds) {
+  // беремо з кешу, який підтягнувся при startDay()
+  const purchases = JSON.parse(localStorage.getItem("purchases") || "[]");
+  return purchases.filter(p => labIds.includes(p.labId));
+}
+
+function openPurchasesModal(purchases) {
+  const tbody = document.querySelector("#purchasesTable tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+  purchases.forEach(p => {
+    const row = `
+      <tr>
+        <td>${p.labName || "—"}</td>
+        <td>${p.city || "—"}</td>
+        <td>${p.item || "—"}</td>
+        <td>${p.amount || "—"}</td>
+        <td>${p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
+      </tr>
+    `;
+    tbody.innerHTML += row;
+  });
+
+  document.getElementById("purchasesModal").style.display = "block";
+}
+
+function closePurchasesModal() {
+  document.getElementById("purchasesModal").style.display = "none";
+}
+// Видалення лабораторії з кешу
+function deleteLab(labId) {
+  if (!confirm("Ви впевнені, що хочете видалити лабораторію?")) return;
+
+  let labs = JSON.parse(localStorage.getItem("labs") || "[]");
+  labs = labs.filter(l => l._id !== labId);
+
+  localStorage.setItem("labs", JSON.stringify(labs));
+  window.labsCache = labs;
+  labsData = labs;
+  filteredLabs = labs;
+
+  alert("✅ Лабораторію видалено з кешу");
+  renderLabs(filteredLabs);
+  updateMap(filteredLabs);
+}
+
+// 5. Пагінація
+function renderPagination(data = filteredLabs) {
+  const totalPages = Math.ceil(data.length / pageSize);
+  const pagination = document.getElementById("pagination");
+  pagination.innerHTML = "";
+
+  for (let i = 1; i <= totalPages; i++) {
+    const btn = document.createElement("button");
+    btn.textContent = i;
+    if (i === currentPage) btn.style.backgroundColor = "#003300";
+    btn.onclick = () => { currentPage = i; renderLabs(data); };
+    pagination.appendChild(btn);
+  }
+}
+
+// 6. Фільтрація
+function applyFilters() {
+  let filtered = labsData;
+
+  const getVal = id => document.getElementById(id)?.value;
+
+  const filters = {
+    partner: getVal("filterPartner"),
+    region: getVal("filterRegion"),
+    city: getVal("filterCity"),
+    institution: getVal("filterInstitution"),
+    edrpou: getVal("filterEdrpou"),
+    manager: getVal("filterManager"),
+    deviceCategory: getVal("filterDevice"),
+    deviceFilter: getVal("filterDevices")
+  };
+
+  if (filters.partner) filtered = filtered.filter(l => l.partner === filters.partner);
+  if (filters.region) filtered = filtered.filter(l => l.region === filters.region);
+  if (filters.city) filtered = filtered.filter(l => l.city === filters.city);
+  if (filters.institution) filtered = filtered.filter(l => l.institution === filters.institution);
+  if (filters.edrpou) filtered = filtered.filter(l => l.edrpou === filters.edrpou);
+  if (filters.manager) filtered = filtered.filter(l => l.manager === filters.manager);
+  if (filters.deviceCategory) {
+    filtered = filtered.filter(l =>
+      (l.devices || []).some(d => d.category === filters.deviceCategory || d.device === filters.deviceCategory)
+    );
+  }
+  if (filters.deviceFilter === "with") {
+    filtered = filtered.filter(l => l.devices && l.devices.length > 0);
+  } else if (filters.deviceFilter === "without") {
+    filtered = filtered.filter(l => !l.devices || l.devices.length === 0);
+  }
+
+  filteredLabs = filtered;
+  currentPage = 1;
+  renderLabs(filteredLabs);
+  populateFilterOptions(filteredLabs);
+  updateMap(filteredLabs);
+
+  if (filteredLabs.length === 1) {
+    const lab = filteredLabs[0];
+    document.getElementById("filterPartner").value = lab.partner || "";
+    document.getElementById("filterRegion").value = lab.region || "";
+    document.getElementById("filterCity").value = lab.city || "";
+    document.getElementById("filterInstitution").value = lab.institution || "";
+    document.getElementById("filterEdrpou").value = lab.edrpou || "";
+    if (document.getElementById("filterManager")) {
+      document.getElementById("filterManager").value = lab.manager || "";
+    }
+  }
+}
+
+// 7. Підказки
+function populateFilterOptions(source = labsData) {
+  const setOptions = (id, values) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = [...new Set(values.filter(Boolean))]
+      .map(v => `<option value="${v}">`).join("");
+  };
+
+  setOptions("partnerOptions", source.map(l => l.partner));
+  setOptions("regionOptions", source.map(l => l.region));
+  setOptions("cityOptions", source.map(l => l.city));
+  setOptions("institutionOptions", source.map(l => l.institution));
+  setOptions("edrpouOptions", source.map(l => l.edrpou));
+  setOptions("managerOptions", source.map(l => l.manager));
+
+  const deviceOptions = document.getElementById("deviceOptions");
+  if (deviceOptions) {
+    deviceOptions.innerHTML = "";
+    const uniqueDevices = new Set();
+    source.forEach(lab => (lab.devices || []).forEach(d => d.category && uniqueDevices.add(d.category)));
+    uniqueDevices.forEach(val => {
+      const option = document.createElement("option");
+      option.value = val;
+      deviceOptions.appendChild(option);
+    });
+  }
+
+  const kpOptions = document.getElementById("kpOptions");
+  if (kpOptions) {
+    kpOptions.innerHTML = "";
+    const uniqueKp = new Set();
+    source.forEach(lab => (lab.devices || []).forEach(d => {
+      if (d.kp) uniqueKp.add(d.kp);
+    }));
+    uniqueKp.forEach(val => {
+      const option = document.createElement("option");
+      option.value = val;
+      kpOptions.appendChild(option);
+    });
+  }
+}
+
+// 8. Скидання фільтрів
+function resetFilters() {
+  document.querySelectorAll("#filters input, #filters select").forEach(el => el.value = "");
+  document.getElementById("filterDevices").value = "all";
+  filteredLabs = labsData;
+  currentPage = 1;
+  renderLabs(filteredLabs);
+  populateFilterOptions(labsData);
+  updateMap(filteredLabs);
+}
+
+// 9. Менеджер-фільтр
+function showManagerFilterIfAllowed() {
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (payload.role === "admin" || payload.role === "manager") {
+      const container = document.getElementById("managerFilterContainer");
+      container.innerHTML = `
+        <label>Менеджер:
+          <input type="text" id="filterManager" list="managerOptions">
+          <datalist id="managerOptions"></datalist>
+        </label>
+      `;
+      populateFilterOptions(labsData);
+    } else {
+      const container = document.getElementById("managerFilterContainer");
+      if (container) container.innerHTML = "";
+    }
+  } catch (err) {
+    console.error("❌ Помилка розбору токена:", err);
+  }
+}
+
+// 10. Модальне вікно
+function openModal(labs) {
+  const tbody = document.querySelector("#modalTable tbody");
+  tbody.innerHTML = "";
+  labs.forEach(lab => {
+    const row = `
+      <tr>
+        <td>${lab.partner || "—"}</td>
+        <td>${lab.city || "—"}</td>
+        <td>${lab.institution || "—"}</td>
+        <td>${lab.edrpou || "—"}</td>
+        <td>${lab.manager || "—"}</td>
+      </tr>
+    `;
+    tbody.innerHTML += row;
+  });
+  document.getElementById("mapModal").style.display = "block";
+}
+
+function closeModal() {
+  document.getElementById("mapModal").style.display = "none";
+}
+
+// 11. Ініціалізація при завантаженні сторінки
+document.addEventListener("DOMContentLoaded", () => {
+  initMap();
+
+  // тепер беремо лабораторії з кешу
+  labsData = JSON.parse(localStorage.getItem("labs") || "[]");
+  filteredLabs = labsData;
+
+  showManagerFilterIfAllowed();
+  populateFilterOptions(labsData);
+  renderLabs(filteredLabs);
+  updateMap(filteredLabs);
+
+  // Автоматичне застосування фільтрів при зміні будь-якого поля
+  document.querySelectorAll("#filters input, #filters select").forEach(el => {
+    el.addEventListener("change", applyFilters);
+  });
+
+  // Кнопка скидання фільтрів
+  const resetBtn = document.querySelector("button[onclick='resetFilters()']");
+  if (resetBtn) resetBtn.addEventListener("click", resetFilters);
+});
+
+// Експорт закупівель у Excel
+function downloadExcel() {
+  const table = document.getElementById("purchasesTable");
+  if (!table) {
+    alert("❌ Таблиця не знайдена");
+    return;
+  }
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.table_to_sheet(table);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Закупівлі");
+
+  XLSX.writeFile(workbook, `zakupivli_${new Date().toISOString().split("T")[0]}.xlsx`);
+}
+</Script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 {
-  "deviceName": "Citolab-300",
+  "deviceName": "CLreader300",
   "testsPerDay": 20,
   "testPrice": 120,
   "reagents": [
     {
-      "name": "CITOLAB™ 10 М",
+      "name": "CL10M",
       "startup": 0,
       "shutdown": 0,
       "perTest": 1,
@@ -12,7 +12,7 @@
       "price": 926.8
     },
     {
-      "name": "CITOLAB™ 11 М",
+      "name": "CL11M",
       "startup": 0,
       "shutdown": 0,
       "perTest": 1,
@@ -20,7 +20,7 @@
       "price": 993.5
     },
     {
-      "name": "CITOLAB™ 10 МAC",
+      "name": "CL10MAC",
       "startup": 0,
       "shutdown": 0,
       "perTest": 1,
@@ -28,7 +28,7 @@
       "price": 733.5
     },
     {
-      "name": "Калібровочні смужки",
+      "name": "CL11K",
       "startup": 0.05,
       "shutdown": 0,
       "perTest": 0,

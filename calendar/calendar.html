@@ -4,8 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>📅 Календар візитів</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <!-- Підключи стилі -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+
+<!-- Підключи саму бібліотеку -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+<!-- Тільки після цього підключай свій код -->
+
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -123,10 +130,11 @@
   <div class="dashboard">
     <div id="filterBar">
       <label><input type="checkbox" id="filterPlanned" checked> Заплановано</label>
-      <label><input type="checkbox" id="filterInProgress" checked> В процесі</label>
-      <label><input type="checkbox" id="filterCancelled" checked> Відмінено</label>
-      <label><input type="checkbox" id="filterRescheduled" checked> Перенесено</label>
-      <label><input type="checkbox" id="filterDone" checked> Проведено</label>
+<label><input type="checkbox" id="filterInProgress" checked> В процесі</label>
+<label><input type="checkbox" id="filterCancelled" checked> Відмінено</label>
+<label><input type="checkbox" id="filterRescheduled" checked> Перенесено</label>
+<label><input type="checkbox" id="filterDone" checked> Проведено</label>
+
       <button onclick="rerenderCalendar()">🔄 Оновити</button>
       <a href="../labcards/labs.html"><button type="button">🏥 Перейти до лабораторій</button></a>
     </div>
@@ -138,11 +146,15 @@
     <div id="visitMenuInfo"></div>
     <div class="visit-menu-actions">
       <button class="btn-start">▶️ Почати</button>
-      <button class="btn-finish">✅ Завершити</button>
+     <textarea id="visitReport" placeholder="Введіть звіт..."></textarea>
+
       <button class="btn-cancel">❌ Скасувати</button>
       <button class="btn-reschedule">📅 Перенести</button>
       <button class="btn-edit">✏️ Редагувати лабораторію</button>
-      <button class="btn-close" onclick="hideVisitMenu()">Закрити</button>
+      <button onclick="processVisitReport(currentVisitId, document.getElementById('visitReport').value)">
+  ✅ Завершити візит
+</button>
+
     </div>
   </div>
 
@@ -158,5 +170,6 @@
 
   <script src="../shared/visits.js"></script>
   <script src="../shared/calendar.js"></script>
+  <script src="../labcards/labcards.js"></script>
 </body>
 </html>

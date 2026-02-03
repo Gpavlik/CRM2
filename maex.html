@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>ЛПЗ у контурах</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+  <style>
+    #map { height: 900px; }
+    #controls { margin: 10px 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 5px; text-align: left; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+<h3>Мапа ЛПЗ</h3>
+<div id="controls">
+  <select id="colorSelect">
+    <option value="red">Червоний</option>
+    <option value="blue">Синій</option>
+    <option value="green">Зелений</option>
+    <option value="orange">Помаранчевий</option>
+    <option value="purple">Фіолетовий</option>
+    <option value="brown">Коричневий</option>
+    <option value="pink">Рожевий</option>
+    <option value="yellow">Жовтий</option>
+    <option value="cyan">Бірюзовий</option>
+    <option value="magenta">Маджента</option>
+    <option value="lime">Лаймовий</option>
+    <option value="teal">Тіл</option>
+    <option value="navy">Темно-синій</option>
+    <option value="gray">Сірий</option>
+    <option value="black">Чорний</option>
+  </select>
+  <br><br>
+  <label><input type="checkbox" class="catFilter" value="hospital" checked> Лікарні</label>
+  <label><input type="checkbox" class="catFilter" value="clinic" checked> Клініки</label>
+  <label><input type="checkbox" class="catFilter" value="doctors" checked> ЦПМСД / лікарі</label>
+  <label><input type="checkbox" class="catFilter" value="laboratory" checked> Лабораторії</label>  <br><br>
+  <button onclick="downloadExcel()">Завантажити Excel</button>
+  <button onclick="clearAll()">Очистити всі контури</button>
+</div>
+<div id="map"></div>
+<h4>Заклади всередині контурів:</h4>
+<div id="lists"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  var map = L.map('map').setView([50.5, 30.5], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+  var drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  var drawControl = new L.Control.Draw({
+    draw: { polygon: true, marker: false, circle: false, rectangle: false, polyline: false },
+    edit: { featureGroup: drawnItems, edit: true, remove: true }
+  });
+  map.addControl(drawControl);
+
+  var allResults = [];
+  const OPENCAGE_KEY = "fa2e36a0856f4d958bb51dfdd0f62428"; // <-- встав свій ключ тут
+
+  function getActiveCategories() {
+    return Array.from(document.querySelectorAll(".catFilter:checked")).map(cb => cb.value);
+  }
+
+  function renderTable() {
+    var activeCats = getActiveCategories();
+    var html = "<table><tr><th>№</th><th>Категорія</th><th>Заклад</th><th>Адреса</th><th>Місто</th><th>Область</th><th>Колір</th></tr>";
+    var i = 1;
+    allResults.forEach(r => {
+      if (activeCats.includes(r.category)) {
+        html += `<tr><td>${i}</td><td>${r.category}</td><td>${r.name}</td><td>${r.addr}</td><td>${r.city}</td><td>${r.region}</td><td>${r.color}</td></tr>`;
+        i++;
+      }
+    });
+    html += "</table>";
+    document.getElementById("lists").innerHTML = html;
+  }
+
+  function getCityRegion(lat, lon, callback) {
+    fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=${OPENCAGE_KEY}&language=uk`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.results && data.results.length > 0) {
+          var comp = data.results[0].components;
+          var city = comp.city || comp.town || comp.village || "невідомо";
+          var region = comp.state || comp.region || "невідомо";
+          var addr = data.results[0].formatted || "Адреса невідома";
+          callback(city, region, addr);
+        } else {
+          callback("невідомо", "невідомо", "Адреса невідома");
+        }
+      })
+      .catch(err => {
+        console.error("OpenCage error:", err);
+        callback("невідомо", "невідомо", "Адреса невідома");
+      });
+  }
+
+  function loadHospitals(polygon, bounds, color) {
+    var south = bounds.getSouth();
+    var west  = bounds.getWest();
+    var north = bounds.getNorth();
+    var east  = bounds.getEast();
+
+    var servers = [
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://overpass.openstreetmap.ru/api/interpreter",
+      "https://overpass.nchc.org.tw/api/interpreter"
+    ];
+
+    var filter = "hospital|clinic|doctors|laboratory";
+
+    var query = `
+      [out:json][timeout:25];
+      (
+        node["amenity"~"${filter}"](${south},${west},${north},${east});
+        way["amenity"~"${filter}"](${south},${west},${north},${east});
+        relation["amenity"~"${filter}"](${south},${west},${north},${east});
+        node["healthcare"]["healthcare"!="pharmacy"](${south},${west},${north},${east});
+        way["healthcare"]["healthcare"!="pharmacy"](${south},${west},${north},${east});
+        relation["healthcare"]["healthcare"!="pharmacy"](${south},${west},${north},${east});
+      );
+      out center tags;
+    `;
+
+    function tryServer(i) {
+      if (i >= servers.length) return;
+      fetch(servers[i] + "?data=" + encodeURIComponent(query))
+        .then(res => res.text())
+        .then(text => {
+          if (!text.trim().startsWith("{")) { tryServer(i+1); return; }
+          let data = JSON.parse(text);
+          data.elements.forEach(el => {
+            var lat = el.lat || (el.center && el.center.lat);
+            var lon = el.lon || (el.center && el.center.lon);
+            if (lat && lon) {
+              var point = turf.point([lon, lat]);
+              var inside = turf.booleanPointInPolygon(point, polygon);
+              if (inside) {
+                var name = el.tags.name || "Без назви";
+                var category = el.tags.amenity || el.tags.healthcare || "невідомо";
+                // робимо повний геореверс через OpenCage
+                getCityRegion(lat, lon, function(city, region, addr) {
+                  L.marker([lat, lon]).addTo(map)
+                    .bindPopup("<b>" + name + "</b><br>" + addr);
+                  allResults.push({name, addr, category, color, city, region});
+                  renderTable();
+                });
+              }
+            }
+          });
+        })
+                .catch(err => { tryServer(i+1); });
+    }
+    tryServer(0);
+  }
+
+  // коли створюється новий контур
+  map.on(L.Draw.Event.CREATED, function (e) {
+    var layer = e.layer;
+    var color = document.getElementById("colorSelect").value;
+    layer.setStyle({ color: color });
+    drawnItems.addLayer(layer);
+    var polygon = layer.toGeoJSON();
+    var bounds = layer.getBounds();
+    loadHospitals(polygon, bounds, color);
+  });
+
+  // редагування існуючих контурів
+  map.on(L.Draw.Event.EDITED, function () { renderTable(); });
+
+  // видалення контурів
+  map.on(L.Draw.Event.DELETED, function () { renderTable(); });
+
+  // експорт у Excel
+  function downloadExcel() {
+    var activeCats = getActiveCategories();
+    var data = [["№","Категорія","Заклад","Адреса","Місто","Область","Колір"]];
+    var i = 1;
+    allResults.forEach(r => {
+      if (activeCats.includes(r.category)) {
+        data.push([i, r.category, r.name, r.addr, r.city, r.region, r.color]);
+        i++;
+      }
+    });
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ЛПЗ");
+    XLSX.writeFile(wb, "lpz.xlsx");
+  }
+
+  // очистити всі контури
+  function clearAll() {
+    drawnItems.clearLayers();
+    allResults = [];
+    document.getElementById("lists").innerHTML = "";
+  }
+
+  // інтерактивний фільтр: при зміні чекбоксів перелік оновлюється
+  document.querySelectorAll(".catFilter").forEach(cb => {
+    cb.addEventListener("change", renderTable);
+  });
+</script>
+</body>
+</html>

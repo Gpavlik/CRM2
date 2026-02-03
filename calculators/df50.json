@@ -1,10 +1,10 @@
 {
-  "deviceName": "DF-50",
+  "deviceName":  "DF50",
   "testsPerDay": 20,
   "testPrice": 120,
   "reagents": [
     {
-      "name": "DIL-C",
+      "name": "DF50:РастворительDILC(20000)",
       "startup": 104.00,
       "shutdown": 500.64,
       "perTest": 32.80,
@@ -12,7 +12,7 @@
       "price": 2607
     },
     {
-      "name": "LYC-1",
+      "name": "DF50:РастворительLYC1(200)",
       "startup": 0.16,
       "shutdown": 0,
       "perTest": 0.19,
@@ -20,7 +20,7 @@
       "price": 1605
     },
     {
-      "name": "LYC-2",
+      "name": "DF50:РастворительLYC2(500)",
       "startup": 13,
       "shutdown": 1.183,
       "perTest": 0.66,
@@ -28,7 +28,7 @@
       "price": 3852
     },
     {
-      "name": "CLE-P",
+      "name": "Dymind:РастворительCLEP(50)",
       "startup": 0,
       "shutdown": 3.6,
       "perTest": 0,

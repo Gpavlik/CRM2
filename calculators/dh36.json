@@ -1,10 +1,10 @@
 {
-  "deviceName": "DH-36",
+  "deviceName": "DH36",
   "testsPerDay": 50,
   "testPrice": 120,
   "reagents": [
     {
-      "name": "DIL-E",
+      "name": "DH36:РастворительDILЕ(20000)",
       "startup": 112.96,
       "shutdown": 450.0,
       "perTest": 23.81,
@@ -12,7 +12,7 @@
       "price": 2395
     },
     {
-      "name": "LYE-1",
+      "name": "DH36:РастворительLYE1(500)",
       "startup": 1.473,
       "shutdown": 0,
       "perTest": 0.5,
@@ -20,7 +20,7 @@
       "price": 2650
     },
     {
-      "name": "CLE-P",
+      "name": "Dymind:РастворительCLEP(50)",
       "startup": 0,
       "shutdown": 1.8,
       "perTest": 0,

@@ -1,9 +1,33 @@
+
+
+// === Кешування ===
+let visitsCache = JSON.parse(localStorage.getItem("visits") || "[]");
+let labCardsCache = JSON.parse(localStorage.getItem("labCards") || "[]");
+
+
+function loadVisits() {
+  return visitsCache;
+}
+
+function saveVisits(visits) {
+  visitsCache = visits;
+  localStorage.setItem("visits", JSON.stringify(visits));
+}
+
+function loadLabCards() {
+  return labCardsCache;
+}
+
+function saveLabCards(labs) {
+  labCardsCache = labs;
+  localStorage.setItem("labCards", JSON.stringify(labs));
+}
+
+// === Глобальні змінні ===
 let currentVisitId = null;
 let calendar = null;
 
-// ==========================
-// Кольори статусів
-// ==========================
+// === Допоміжні функції ===
 function statusColor(status) {
   switch ((status || "").toLowerCase()) {
     case "в процесі": return "#ff9800";
@@ -14,28 +38,26 @@ function statusColor(status) {
   }
 }
 
-// ==========================
-// Фільтри
-// ==========================
 function filterByStatus(status) {
-  const s = (status || "заплановано").toLowerCase();
-  if (s === "заплановано") return document.getElementById("filterPlanned").checked;
-  if (s === "в процесі") return document.getElementById("filterInProgress").checked;
-  if (s === "відмінено") return document.getElementById("filterCancelled").checked;
-  if (s === "перенесено") return document.getElementById("filterRescheduled").checked;
-  if (s === "проведено") return document.getElementById("filterDone").checked;
-  return true;
+  const elMap = {
+    "заплановано": "filterPlanned",
+    "в процесі": "filterInProgress",
+    "відмінено": "filterCancelled",
+    "перенесено": "filterRescheduled",
+    "проведено": "filterDone"
+  };
+  const id = elMap[(status || "заплановано").toLowerCase()];
+  const el = id ? document.getElementById(id) : null;
+  return el ? el.checked : true; // якщо чекбокса немає — не фільтруємо
 }
 
-// ==========================
-// Події для календаря
-// ==========================
+
 function eventsFromVisits(visits) {
   return visits
     .filter(v => filterByStatus(v.status))
     .map(v => ({
-      id: v._id,
-      title: `${v.labId?.institution || v.labName} — ${v.status || "заплановано"}`,
+      id: v.id,
+      title: `${v.labName} — ${v.status || "заплановано"}`,
       start: v.date,
       backgroundColor: statusColor(v.status),
       borderColor: statusColor(v.status),
@@ -43,96 +65,27 @@ function eventsFromVisits(visits) {
     }));
 }
 
-// ==========================
-// Меню візиту
-// ==========================
-function showVisitMenu(visit) {
-  currentVisitId = visit._id;
-  document.getElementById("visitMenuInfo").innerHTML = `
-    <p><strong>${visit.labId?.institution || visit.labName}</strong></p>
-    <p>Дата: ${new Date(visit.date).toLocaleString()}</p>
-    <p>Статус: ${visit.status || "заплановано"}</p>
-    ${visit.tasks ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>` : ""}
-  `;
-  document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
-  document.querySelector("#visitMenu .btn-finish").onclick = () => onFinishVisit();
-  document.querySelector("#visitMenu .btn-cancel").onclick = () => onCancelVisit();
-  document.querySelector("#visitMenu .btn-reschedule").onclick = () => onRescheduleVisit();
-  document.querySelector("#visitMenu .btn-edit").onclick = () => onEditLabCard();
-
-  document.getElementById("visitMenu").classList.add("show");
+// === Оновлення статусів ===
+function updateVisitStatus(visitId, status) {
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+  v.status = status;
+  saveVisits(visits);
 }
 
-function hideVisitMenu() {
-  document.getElementById("visitMenu").classList.remove("show");
+function cancelVisit(visitId) {
+  updateVisitStatus(visitId, "відмінено");
 }
 
-// ==========================
-// Виклики до бекенду
-// ==========================
-async function patchVisit(action, body = {}) {
-  const token = localStorage.getItem("token");
-  await fetch(`https://nodejs-production-7176.up.railway.app/visits/${currentVisitId}/${action}`, {
-    method: "PATCH",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  await rerenderCalendar();
-}
-
-// ==========================
-// Дії з візитом
-// ==========================
-function onStartVisit() {
-  patchVisit("start");
-  hideVisitMenu();
-}
-
-function onCancelVisit() {
-  patchVisit("cancel");
-  hideVisitMenu();
-}
-
-function onRescheduleVisit() {
-  const newDate = prompt("Введіть нову дату (YYYY-MM-DD HH:mm):");
-  if (!newDate) return;
-  patchVisit("reschedule", { newDate });
-  hideVisitMenu();
-}
-
-function onFinishVisit() {
-  patchVisit("finish");
-  hideVisitMenu();
-}
-
-function onEditLabCard() {
-  localStorage.setItem("editLabCard", JSON.stringify({ labId: currentVisitId }));
-  window.location.href = "../labcards/labcard.html";
-}
-
-// ==========================
-// Перерендер календаря
-// ==========================
-async function rerenderCalendar() {
-  if (!calendar) return;
-  const token = localStorage.getItem("token");
-  const res = await fetch("https://nodejs-production-7176.up.railway.app/visits", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-  const visits = await res.json();
-
-  const events = eventsFromVisits(visits);
+// === Календар ===
+function rerenderCalendar() {
+  const events = eventsFromVisits(loadVisits());
   calendar.removeAllEvents();
   events.forEach(e => calendar.addEvent(e));
 }
 
-// ==========================
-// Ініціалізація календаря
-// ==========================
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   const calendarEl = document.getElementById("calendar");
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
@@ -142,9 +95,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       center: "title",
       right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
     },
-    events: eventsFromVisits(await (await fetch("https://nodejs-production-7176.up.railway.app/visits", {
-      headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-    })).json()),
+    events: eventsFromVisits(loadVisits()),
     eventClick: info => showVisitMenu(info.event.extendedProps.visit)
   });
   calendar.render();
@@ -154,7 +105,158 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.onStartVisit = onStartVisit;
   window.onCancelVisit = onCancelVisit;
   window.onRescheduleVisit = onRescheduleVisit;
-  window.onEditLabCard = onEditLabCard;
-  window.onFinishVisit = onFinishVisit;
   window.rerenderCalendar = rerenderCalendar;
 });
+
+// === Меню візиту ===
+function showVisitMenu(visit) {
+  currentVisitId = visit.id;
+
+  document.getElementById("visitMenuInfo").innerHTML = `
+    <p><strong>${visit.labName}</strong></p>
+    <p>Дата: ${visit.date}</p>
+    <p>Статус: ${visit.status || "заплановано"}</p>
+    ${visit.tasks ? `<p>Завдання:</p><ul>${visit.tasks.map(t => `<li>${t.action || t.title}</li>`).join("")}</ul>` : ""}
+  `;
+
+  document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
+  document.querySelector("#visitMenu .btn-cancel").onclick = () => onCancelVisit();
+  document.querySelector("#visitMenu .btn-reschedule").onclick = () => onRescheduleVisit();
+  document.querySelector("#visitMenu .btn-edit").onclick = () => editLabCard(visit.labId);
+
+  document.getElementById("visitMenu").classList.add("show");
+}
+
+function hideVisitMenu() {
+  document.getElementById("visitMenu").classList.remove("show");
+}
+
+// === Дії з візитами ===
+function onStartVisit() {
+  updateVisitStatus(currentVisitId, "в процесі");
+  hideVisitMenu();
+  rerenderCalendar();
+}
+
+function onCancelVisit() {
+  cancelVisit(currentVisitId);
+  hideVisitMenu();
+  rerenderCalendar();
+}
+
+function onRescheduleVisit() {
+  rescheduleVisit(currentVisitId);
+}
+
+function rescheduleVisit(visitId) {
+  // Remove existing modal if any
+  const existing = document.getElementById("rescheduleModal");
+  if (existing) existing.remove();
+
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const modalHtml = `
+    <div id="rescheduleModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeRescheduleModal()">&times;</span>
+        <h3>Перенесення візиту</h3>
+        <label>Оберіть нову дату:
+          <input type="date" id="newVisitDate" value="${v.date}">
+        </label>
+        <div class="modal-actions" style="margin-top:12px;text-align:right;">
+          <button onclick="confirmReschedule('${visitId}')">✅ Зберегти</button>
+          <button onclick="closeRescheduleModal()">❌ Скасувати</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  document.getElementById("rescheduleModal").style.display = "block";
+}
+
+function confirmReschedule(visitId) {
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+
+  const newDate = document.getElementById("newVisitDate").value;
+  if (!newDate) return;
+
+  v.date = newDate;
+  v.status = "перенесено"; // позначаємо як перенесений
+  saveVisits(visits);
+
+  closeRescheduleModal();
+  hideVisitMenu();
+  rerenderCalendar();
+
+  alert(`✅ Візит перенесено на ${newDate}`);
+}
+
+function closeRescheduleModal() {
+  const modal = document.getElementById("rescheduleModal");
+  if (modal) modal.remove();
+}
+
+window.rerenderCalendar = rerenderCalendar;
+function loadVisitsFromCache() {
+  return JSON.parse(localStorage.getItem("visits") || "[]");
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const calendarEl = document.getElementById("calendar");
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    locale: "uk",
+    events: loadVisitsFromCache().map(v => ({
+      id: v.id,
+      title: `${v.labName} (${v.city})`,
+      start: v.date,
+      extendedProps: {
+        tasks: v.tasks,
+        status: v.status,
+        distanceKm: v.distanceKm,
+        travelHours: v.travelHours
+      }
+    })),
+    eventClick: function(info) {
+      const visit = info.event.extendedProps;
+      alert(
+        `📋 Лабораторія: ${info.event.title}\n` +
+        `📅 Дата: ${info.event.start.toLocaleDateString()}\n` +
+        `🛠️ Завдання: ${visit.tasks?.length || 0}\n` +
+        `📍 Відстань: ${visit.distanceKm} км\n` +
+        `⏱️ Час у дорозі: ${visit.travelHours} год\n` +
+        `Статус: ${visit.status}`
+      );
+    }
+  });
+
+  calendar.render();
+  window.rerenderCalendar = () => {
+    calendar.removeAllEvents();
+    calendar.addEventSource(loadVisitsFromCache().map(v => ({
+      id: v.id,
+      title: `${v.labName} (${v.city})`,
+      start: v.date,
+      extendedProps: v
+    })));
+  };
+});
+window.rerenderCalendar = () => {
+  calendar.removeAllEvents();
+  calendar.addEventSource(loadVisitsFromCache().map(v => ({
+    id: v.id,
+    title: `${v.labName} (${v.city})`,
+    start: v.date,
+    extendedProps: v
+  })));
+};
+function formatDateYYYYMMDD(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}

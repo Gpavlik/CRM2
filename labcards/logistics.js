@@ -1,4 +1,4 @@
-// logistics.js — узгоджена версія без export/import
+// logistics.js — кешова версія без export/import
 
 const ORS_TOKEN =
   "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjA3YmNiYmQxNWVmNTQxZTFhMzU3ZjkyMjZmZTVhNDc1IiwiaCI6Im11cm11cjY0In0=";
@@ -13,24 +13,21 @@ function formatDateYYYYMMDD(dateObj) {
   return `${year}-${month}-${day}`;
 }
 
-// ===== Отримання відстані між містами через OpenRouteService =====
-async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
-  // нормалізуємо ключ кешу, щоб уникнути дублювання Київ__Львів vs Львів__Київ
+// ===== Отримання відстані та часу між містами через OpenRouteService =====
+async function getDistanceAndTimeORS(cityA, cityB, token = ORS_TOKEN) {
   const key = [cityA, cityB].sort().join("__");
   if (orsDistanceCache[key]) return orsDistanceCache[key];
 
   const geocode = async city => {
     const res = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${token}&text=${encodeURIComponent(
-        city
-      )}`
+      `https://api.openrouteservice.org/geocode/search?api_key=${token}&text=${encodeURIComponent(city)}&boundary.country=UA`
     );
     const data = await res.json();
     return data.features[0]?.geometry?.coordinates;
   };
 
   const [coordA, coordB] = await Promise.all([geocode(cityA), geocode(cityB)]);
-  if (!coordA || !coordB) return Infinity;
+  if (!coordA || !coordB) return { km: Infinity, hours: Infinity };
 
   const res = await fetch(`https://api.openrouteservice.org/v2/matrix/driving-car`, {
     method: "POST",
@@ -40,31 +37,39 @@ async function getDistanceKmORS(cityA, cityB, token = ORS_TOKEN) {
     },
     body: JSON.stringify({
       locations: [coordA, coordB],
-      metrics: ["distance"]
+      metrics: ["distance", "duration"]
     })
   });
 
   const data = await res.json();
   const meters = data.distances?.[0]?.[1];
-  const km = meters ? meters / 1000 : Infinity;
+  const seconds = data.durations?.[0]?.[1];
 
-  orsDistanceCache[key] = km;
-  return km;
+  const km = meters ? meters / 1000 : Infinity;
+  const hours = seconds ? (seconds / 3600).toFixed(2) : Infinity;
+
+  orsDistanceCache[key] = { km, hours };
+  return { km, hours };
 }
 
 // ===== Пошук найближчої доступної дати для задачі =====
 async function findNearbyAvailableDate(
   taskCity,
   taskSchedule,
-  token = ORS_TOKEN,
-  preferredDate = null
+  {
+    token = ORS_TOKEN,
+    preferredDate = null,
+    maxTasksPerDay = 3,
+    nearbyDistanceKm = 25,
+    nearbyDurationHours = 0.75
+  } = {}
 ) {
-  const maxTasksPerDay = 6;
   const candidate = preferredDate ? new Date(preferredDate) : new Date();
   let fallbackDate = null;
 
   for (let i = 0; i < 60; i++) {
     const day = candidate.getDay();
+    // пропускаємо неділю (0) та суботу (6)
     if (day === 0 || day === 6) {
       candidate.setDate(candidate.getDate() + 1);
       continue;
@@ -77,8 +82,8 @@ async function findNearbyAvailableDate(
     let nearby = false;
 
     for (const t of tasks) {
-      const dist = await getDistanceKmORS(taskCity, t.city, token);
-      if (dist <= 20) {
+      const { km, hours } = await getDistanceAndTimeORS(taskCity, t.city, token);
+      if (km <= nearbyDistanceKm || hours <= nearbyDurationHours) {
         nearby = true;
         break;
       }
@@ -93,9 +98,57 @@ async function findNearbyAvailableDate(
   return fallbackDate || formatDateYYYYMMDD(candidate);
 }
 
+// ===== Планування логістики для списку візитів =====
+async function planLogisticsForVisits(visits, taskSchedule = {}) {
+  const plannedVisits = [];
+
+  for (const visit of visits) {
+    const availableDate = await findNearbyAvailableDate(
+      visit.city,
+      taskSchedule,
+      {
+        token: ORS_TOKEN,
+        maxTasksPerDay: 3,
+        nearbyDistanceKm: 40,
+        nearbyDurationHours: 0.75
+      }
+    );
+
+    const { km, hours } = await getDistanceAndTimeORS("Київ", visit.city, ORS_TOKEN);
+
+    const plannedVisit = {
+      id: `${visit.labId}_${availableDate}_${Date.now()}`,
+      labId: visit.labId,
+      labName: visit.labName,
+      city: visit.city,
+      date: availableDate,
+      tasks: visit.tasks || [],
+      status: "заплановано",
+      distanceKm: km,
+      travelHours: hours
+    };
+
+    plannedVisits.push(plannedVisit);
+
+    if (!taskSchedule[availableDate]) taskSchedule[availableDate] = [];
+    taskSchedule[availableDate].push({ city: visit.city });
+  }
+
+  // Зберігаємо у кеш
+  const visitsCache = JSON.parse(localStorage.getItem("visits") || "[]");
+  const updatedVisits = [...visitsCache, ...plannedVisits];
+  localStorage.setItem("visits", JSON.stringify(updatedVisits));
+  window.visitsCache = updatedVisits;
+
+  alert(`✅ Заплановано ${plannedVisits.length} візитів (збережено у кеш)`);
+  return plannedVisits;
+}
+
 // ===== Робимо глобально доступним =====
 window.ORS_TOKEN = ORS_TOKEN;
 window.orsDistanceCache = orsDistanceCache;
-window.getDistanceKmORS = getDistanceKmORS;
+window.getDistanceKmORS = getDistanceAndTimeORS;
+window.getDistanceAndTimeORS = getDistanceAndTimeORS;
 window.findNearbyAvailableDate = findNearbyAvailableDate;
-window.formatDateYYYYMMDD = formatDateYYYYMMDD; 
+window.formatDateYYYYMMDD = formatDateYYYYMMDD;
+window.planLogisticsForVisits = planLogisticsForVisits;

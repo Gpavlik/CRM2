@@ -1,5 +1,5 @@
 {
-  "deviceName": "LS-1100",
+  "deviceName": "LS1100",
   "testsPerDay": 20,
   "testPrice": 120,
   "analyses": {

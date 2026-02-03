@@ -1,10 +1,10 @@
 {
-  "deviceName": "UN-73",
+  "deviceName": "UN73",
   "testsPerDay": 20,
   "testPrice": 120,
   "reagents": [
     {
-      "name": "DIL-A",
+      "name": "UN73:РастворительDYLA(20000)",
       "startup": 176.03,
       "shutdown": 260.233,
       "perTest": 36.963,
@@ -12,7 +12,7 @@
       "price": 2607
     },
     {
-      "name": "LYG-1",
+      "name": "UN73:РастворительLYG1(1000)",
       "startup": 4.00,
       "shutdown": 0,
       "perTest": 0.5,
@@ -20,7 +20,7 @@
       "price": 3520
     },
     {
-      "name": "LYA-2",
+      "name": "UN73:РастворительLYA2(500)",
       "startup": 3.00,
       "shutdown": 0.104,
       "perTest": 0.5,
@@ -28,7 +28,7 @@
       "price": 6490
     },
     {
-      "name": "LYA-3",
+      "name": "UN73:РастворительLYA3(1000)",
       "startup": 3.00,
       "shutdown": 1.19,
       "perTest": 1.4,
@@ -36,7 +36,7 @@
       "price": 4743
     },
     {
-      "name": "CLE-P",
+      "name": "UN73:РастворительCLEP(50)",
       "startup": 0,
       "shutdown": 3.6,
       "perTest": 0,
