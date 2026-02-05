@@ -20,7 +20,7 @@ let labsInPolygon = [];
 // IndexedDB helpers
 // ==========================
 const DB_NAME = "labsDB";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -44,6 +44,7 @@ function openDB() {
   });
 }
 
+
 async function getAllFromDB(storeName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -55,14 +56,27 @@ async function getAllFromDB(storeName) {
   });
 }
 
-async function putToDB(storeName, item) {
-  const db = await openDB();
+function putToDB(storeName, item) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    const req = store.put(item);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onsuccess = event => {
+      const db = event.target.result;
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+
+      if (storeName === "labs") {
+        store.put(item, item.edrpou);
+      } else if (storeName === "visits") {
+        // тепер завжди є item.id
+        store.put(item, item.id);
+      } else {
+        reject("❌ Невідомий store");
+      }
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = err => reject(err);
+    };
+    request.onerror = err => reject(err);
   });
 }
 
@@ -90,14 +104,37 @@ async function clearStore(storeName) {
 // ==========================
 // Ініціалізація кешу
 // ==========================
+// ініціалізація кешу
 async function initCache() {
-  labsCache = await getAllFromDB("labs");
-  visitsCache = await getAllFromDB("visits");
-  filteredLabs = labsCache;
-
-  syncVisitsToLabs();
-  if (window.rerenderCalendar) window.rerenderCalendar();
+  try {
+    labsCache = await getAllFromDB("labs");     // читаємо IndexedDB
+    visitsCache = await getAllFromDB("visits"); // читаємо IndexedDB
+    console.log("✅ Кеш ініціалізовано:", labsCache.length, "лабораторій,", visitsCache.length, "візитів");
+  } catch (err) {
+    console.error("❌ Помилка при ініціалізації кешу:", err);
+    labsCache = [];
+    visitsCache = [];
+  }
 }
+
+// стартовий рендер
+async function startLabsRender() {
+  await initCache(); // завантажуємо labsCache та visitsCache з IndexedDB
+
+  if (labsCache && labsCache.length > 0) {
+    renderLabs(labsCache);              // картки
+    updateMap(labsCache);               // карта
+    populateFilterOptions(labsCache);   // фільтри
+  } else {
+    const container = document.getElementById("labsContainer");
+    if (container) {
+      container.innerHTML = "<p>⚠️ Лабораторій не знайдено у кеші.</p>";
+    }
+  }
+}
+
+// виклик при завантаженні сторінки
+startLabsRender();
 
 // ==========================
 // Візити
@@ -166,19 +203,6 @@ function syncVisitsToLabs() {
 
   updateMap(labsCache);
 }
-
-// ==========================
-// Початковий рендер
-// ==========================
-async function startLabsRender() {
-  await initCache(); // завантажуємо labsCache та visitsCache з IndexedDB
-  if (labsCache.length > 0) {
-    renderLabs(labsCache);
-    updateMap(labsCache);
-    populateFilterOptions(labsCache);
-  }
-}
-startLabsRender();
 
 // ==========================
 // Фільтри
@@ -293,21 +317,25 @@ function populateFilterOptions(source = labsCache) {
 // ==========================
 // Рендеринг списку лабораторій
 // ==========================
-function renderLabs(data = filteredLabs) {
+function renderLabs(data) {
   try {
     const container = document.getElementById("labsContainer");
-    if (!container) return;
+    if (!container) {
+      console.warn("⚠️ Контейнер labsContainer не знайдено.");
+      return;
+    }
 
+    const labs = data || [];
     container.innerHTML = "";
 
-    if (!data || data.length === 0) {
+    if (labs.length === 0) {
       container.innerHTML = "<p>⚠️ Лабораторій не знайдено.</p>";
       return;
     }
 
     const start = (currentPage - 1) * pageSize;
     const end = start + pageSize;
-    const labsToRender = data.slice(start, end);
+    const labsToRender = labs.slice(start, end);
 
     labsToRender.forEach(lab => {
       const card = document.createElement("div");
@@ -321,25 +349,26 @@ function renderLabs(data = filteredLabs) {
         <h3>${lab.partner || "—"} [ЄДРПОУ: ${lab.edrpou || "—"}]</h3>
         <p>📍 ${lab.region || "—"}, ${lab.city || "—"}</p>
         <p>📞 ${lab.phone || "—"}</p>
-        <p>👤 Контактна особа: ${lab.contractor || "—"}</p>
+        <p>👤 Контрагент: ${lab.contractor || "—"}</p>
         <p>👤 Менеджер: ${lab.manager || "—"}</p>
         <p>🔬 Прилади: ${devicesList}</p>
         <div class="lab-actions">
-        <button onclick="editLabCard('${lab.edrpou}')">✏️ Редагувати</button>  
-        <button onclick="deleteLab('${lab.edrpou}')">🗑️ Видалити</button>
+          <button onclick="editLabCard('${lab.edrpou}')">✏️ Редагувати</button>  
+          <button onclick="deleteLab('${lab.edrpou}')">🗑️ Видалити</button>
           <button onclick="openCreateVisitModal('${lab.edrpou}')">📅 Візит</button>
         </div>
       `;
       container.appendChild(card);
     });
 
-    renderPagination(data);
+    if (labs.length > pageSize) {
+      renderPagination(labs);
+    }
 
   } catch (err) {
     console.error("❌ Помилка при рендерингу лабораторій:", err);
   }
 }
-
 // ==========================
 // Пагінація
 // ==========================
@@ -711,19 +740,22 @@ async function generateAllLabVisits() {
 // ==========================
 async function confirmCreateVisit() {
   const manager = localStorage.getItem("userLogin") || "Невідомо";
-  const date = document.getElementById("visitDate")?.value;
-  const time = document.getElementById("visitTime")?.value;
+  const date = document.getElementById("visitDate")?.value; // формат YYYY-MM-DD
+  const time = document.getElementById("visitTime")?.value; // формат HH:MM
 
   if (!date || !time) {
     alert("❌ Виберіть дату та час");
     return;
   }
 
-  const fullDateTime = new Date(`${date}T${time}`);
+  // генеруємо унікальний id
+  const visitId = `${window.currentLabEdrpou}_${date}_${time}_${Date.now()}`;
+
   const newVisit = {
-    id: Date.now(),
+    id: visitId,
     labId: String(window.currentLabEdrpou).trim(),
-    date: fullDateTime.toISOString(),
+    date,   // зберігаємо окремо
+    time,   // зберігаємо окремо
     manager,
     status: "заплановано",
     notes: ""
@@ -732,17 +764,21 @@ async function confirmCreateVisit() {
   // перевірка дублювання
   const visits = await getAllFromDB("visits");
   const alreadyExists = visits.some(v =>
-    v.labId === newVisit.labId && v.date === newVisit.date
+    v.labId === newVisit.labId && v.date === newVisit.date && v.time === newVisit.time
   );
   if (alreadyExists) {
     alert("⚠️ Такий візит вже існує у кеші!");
     return;
   }
 
+  // збереження у IndexedDB
   await putToDB("visits", newVisit);
   visitsCache = await getAllFromDB("visits");
 
+  // синхронізація з лабораторіями
   syncVisitsToLabs();
+
+  // оновлення календаря
   if (window.rerenderCalendar) window.rerenderCalendar();
 
   alert("✅ Візит додано у кеш (IndexedDB)!");

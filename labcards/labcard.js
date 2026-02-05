@@ -14,7 +14,12 @@ let visitsCache = JSON.parse(localStorage.getItem("visits") || "[]"); // кеш 
 // Утиліти для IndexedDB
 
 const DB_NAME = "labsDB";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
+
+function getQueryParam(name) {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(name);
+}
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -48,9 +53,21 @@ async function saveToDB(storeName, dataArray) {
   const db = await openDB();
   const tx = db.transaction(storeName, "readwrite");
   const store = tx.objectStore(storeName);
-  dataArray.forEach(item => store.put(item));
+
+  dataArray.forEach(item => {
+    // для labs ключ = edrpou, для visits можна id або date
+    if (storeName === "labs" && item.edrpou) {
+      store.put(item, item.edrpou);
+    } else if (storeName === "visits" && item.id) {
+      store.put(item, item.id);
+    } else {
+      console.warn("❌ Об’єкт без ключа:", item);
+    }
+  });
+
   return tx.complete;
 }
+
 
 async function clearDB(storeName) {
   const db = await openDB();
@@ -179,11 +196,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 // ==========================
 async function initLabCard() {
   const labs = window.labsCache || await getAllFromDB("labs");
-  const edrpou = localStorage.getItem("currentLabEdrpou");
-console.log("▶ initLabCard викликана");
+  const edrpou = getQueryParam("id");  // ← беремо з URL
+
+  console.log("▶ initLabCard викликана");
 
   if (!edrpou) {
-    console.error("❌ Поточний ЄДРПОУ не встановлено.");
+    console.error("❌ Поточний ЄДРПОУ не передано.");
     return;
   }
 
@@ -214,8 +232,6 @@ console.log("▶ initLabCard викликана");
 
   lab.devices.forEach((d, idx) => {
     const deviceName = d.device || d.name || d.category || "";
-
-    // залишаємо тільки останні дані по кожному реагенту
     const allOrders = d.reagentsOrders || [];
     const latestReagents = getLatestReagentsInfo(allOrders);
 
@@ -228,11 +244,10 @@ console.log("▶ initLabCard викликана");
       replacedParts: d.replacedParts || "",
       kp: d.kp || "",
       testCount: d.testCount || "",
-      reagentsInfo: latestReagents,   // ← тут вже тільки останні дані
+      reagentsInfo: latestReagents,
       analyses: d.analyses || {}
     });
 
-    // Лог для перевірки
     Object.entries(latestReagents).forEach(([name, info]) => {
       console.log(`   ${name} → дата: ${info.lastOrderDate}, кількість: ${info.lastOrderCount}`);
     });
@@ -240,6 +255,7 @@ console.log("▶ initLabCard викликана");
 
   console.log("✅ Картка лабораторії ініціалізована");
 }
+
 
 // ==========================
 // Збір даних з форми
@@ -972,35 +988,37 @@ async function processVisitReport(visitId, reportData) {
 // ==========================
 // Збереження лабораторії у кеш
 // ==========================
-function saveOrUpdateLabCard() {
+async function saveOrUpdateLabCard() {
   try {
     const labCard = collectLabCardData();
 
+    // Перевірка обов'язкових полів
     if (!labCard.partner || !labCard.region || !labCard.city || !labCard.institution) {
       alert("⚠️ Заповніть обов'язкові поля: Контрагент, Область, Місто, ЛПЗ.");
       return;
     }
 
-    let labs = JSON.parse(localStorage.getItem("labs") || "[]");
-
-    // шукаємо лабораторію за ЄДРПОУ
-    const idx = labs.findIndex(l => l.edrpou === labCard.edrpou);
+    // Відкриваємо IndexedDB і перевіряємо чи існує лабораторія з таким ЄДРПОУ
+    const existingLabs = await getAllFromDB("labs");
+    const idx = existingLabs.findIndex(l => l.edrpou === labCard.edrpou);
 
     if (idx >= 0) {
-      labs[idx] = labCard; // оновлюємо існуючу
+      // Оновлюємо існуючу
+      await saveToDB("labs", [labCard]);
       alert("🔄 Лабораторію оновлено у кеші!");
     } else {
-      labs.push(labCard);  // додаємо нову
+      // Додаємо нову
+      await saveToDB("labs", [labCard]);
       alert("✅ Лабораторію створено і збережено у кеші!");
     }
 
-    localStorage.setItem("labs", JSON.stringify(labs));
+    console.log("✅ Лабораторія збережена:", labCard);
+
   } catch (err) {
     console.error("❌ Помилка при збереженні/оновленні лабораторії:", err);
     alert("⚠️ Сталася помилка при збереженні. Перевірте консоль.");
   }
 }
-
 // ==========================
 // Видалення лабораторії з кешу
 // ==========================
