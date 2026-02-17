@@ -747,9 +747,9 @@ function submitPromoOrder() {
   });
 
   // один запит на всі рядки
-  fetch("https://script.google.com/macros/s/AKfycbzrPvHHFsszEKfzbPWgpNn9u-4a_fVVyPY30Kk5LOBr6JVrbiOS3Qm8Vht8rb6C0NTE/exec", {
+  fetch("https://script.google.com/macros/s/AKfycby_-OwpYYAjDpKh0FkKio6fkD_pENWescMSnWyInx4orD8mkXkQegKNVAT8jsxfVt2W/exec", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(rows)
   })
   .then(r => r.text())
