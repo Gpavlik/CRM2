@@ -605,7 +605,7 @@ function askForPromo() {
     "YHLO","BK120","Bioassays240Plus","ISE","DP-C16","CA1200"
   ];
 
-  const promoTypes = ["Стаття","Листівка","Брошура"];
+  const promoTypes = ["листівка"];
   const gifts = ["Календар","Блокнот","Ручка"];
 
   const imageMap = {
@@ -729,9 +729,34 @@ function submitPromoOrder() {
     });
   });
 
-  // логін менеджера (можна взяти з системи або змінної)
-  const login = getLoginName(); // беремо логін з userRole
+  const login = getLoginName();
 
+  // --- формуємо масив для Google Sheets ---
+  const rows = [];
+  Object.keys(order).forEach(section => {
+    Object.keys(order[section]).forEach(item => {
+      const val = order[section][item];
+      rows.push({
+        manager: login,
+        type: section,
+        name: item,
+        quantity: typeof val === "object" ? val.quantity : val,
+        comment: typeof val === "object" ? val.comment : ""
+      });
+    });
+  });
+
+  // один запит на всі рядки
+  fetch("https://script.google.com/macros/s/AKfycbzrPvHHFsszEKfzbPWgpNn9u-4a_fVVyPY30Kk5LOBr6JVrbiOS3Qm8Vht8rb6C0NTE/exec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rows)
+  })
+  .then(r => r.text())
+  .then(txt => console.log("Записано у Sheets:", txt))
+  .catch(err => console.error("Помилка запису:", err));
+
+  // --- формування листа ---
   const now = new Date();
   const monthNames = [
     "січень","лютий","березень","квітень","травень","червень",
@@ -752,7 +777,6 @@ function submitPromoOrder() {
   window.location.href = `mailto:oplevish66@gmail.com?subject=${subject}&body=${mailBody}`;
   closePromoModal();
 }
-
 
 </script>
 </body>

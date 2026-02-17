@@ -12,13 +12,9 @@ let currentPage = 1;
 let labsInPolygon = [];
 
 
-
 //==========================
 //робота з IndexedDB
 //==========================
-// ==========================
-// IndexedDB helpers
-// ==========================
 const DB_NAME = "labsDB";
 const DB_VERSION = 3;
 
@@ -44,7 +40,6 @@ function openDB() {
   });
 }
 
-
 async function getAllFromDB(storeName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -67,7 +62,6 @@ function putToDB(storeName, item) {
       if (storeName === "labs") {
         store.put(item, item.edrpou);
       } else if (storeName === "visits") {
-        // тепер завжди є item.id
         store.put(item, item.id);
       } else {
         reject("❌ Невідомий store");
@@ -101,14 +95,14 @@ async function clearStore(storeName) {
     req.onerror = () => reject(req.error);
   });
 }
+
 // ==========================
 // Ініціалізація кешу
 // ==========================
-// ініціалізація кешу
 async function initCache() {
   try {
-    labsCache = await getAllFromDB("labs");     // читаємо IndexedDB
-    visitsCache = await getAllFromDB("visits"); // читаємо IndexedDB
+    labsCache = await getAllFromDB("labs");
+    visitsCache = await getAllFromDB("visits");
     console.log("✅ Кеш ініціалізовано:", labsCache.length, "лабораторій,", visitsCache.length, "візитів");
   } catch (err) {
     console.error("❌ Помилка при ініціалізації кешу:", err);
@@ -117,14 +111,13 @@ async function initCache() {
   }
 }
 
-// стартовий рендер
 async function startLabsRender() {
-  await initCache(); // завантажуємо labsCache та visitsCache з IndexedDB
+  await initCache();
 
   if (labsCache && labsCache.length > 0) {
-    renderLabs(labsCache);              // картки
-    updateMap(labsCache);               // карта
-    populateFilterOptions(labsCache);   // фільтри
+    renderLabs(labsCache);
+    updateMap(labsCache);
+    populateFilterOptions(labsCache);
   } else {
     const container = document.getElementById("labsContainer");
     if (container) {
@@ -133,7 +126,6 @@ async function startLabsRender() {
   }
 }
 
-// виклик при завантаженні сторінки
 startLabsRender();
 
 // ==========================
@@ -144,25 +136,18 @@ async function loadVisits() {
   return visitsCache;
 }
 
-async function saveVisits(visits) {
-  visitsCache = visits;
-  for (const v of visits) {
-    await putToDB("visits", v);
-  }
-  syncVisitsToLabs();
-  if (window.rerenderCalendar) window.rerenderCalendar();
-}
-
 async function addVisit(visit) {
   visitsCache.push(visit);
   await putToDB("visits", visit);
   syncVisitsToLabs();
+  if (window.rerenderCalendar) window.rerenderCalendar();
 }
 
 async function deleteVisit(visitId) {
   visitsCache = visitsCache.filter(v => v.id !== visitId);
   await deleteFromDB("visits", visitId);
   syncVisitsToLabs();
+  if (window.rerenderCalendar) window.rerenderCalendar();
 }
 
 async function updateVisit(visitId, updates) {
@@ -171,6 +156,7 @@ async function updateVisit(visitId, updates) {
     visitsCache[idx] = { ...visitsCache[idx], ...updates };
     await putToDB("visits", visitsCache[idx]);
     syncVisitsToLabs();
+    if (window.rerenderCalendar) window.rerenderCalendar();
   }
 }
 
@@ -212,7 +198,7 @@ function applyFilters() {
     const getVal = id => document.getElementById(id)?.value.trim().toLowerCase() || "";
 
     const filters = {
-      contractor: getVal("contractor"),   // у HTML є саме contractor
+      contractor: getVal("contractor"),
       region: getVal("filterRegion"),
       city: getVal("filterCity"),
       institution: getVal("filterInstitution"),
@@ -236,7 +222,6 @@ function applyFilters() {
       return (d.device || d.name || d.category || "").toLowerCase();
     }
 
-    // трипозиційний перемикач
     if (filters.deviceMode === "with") {
       filtered = filtered.filter(l => l.devices && l.devices.length > 0);
     } else if (filters.deviceMode === "without") {
@@ -254,6 +239,10 @@ function applyFilters() {
   }
 }
 
+
+// ==========================
+// Фільтри
+// ==========================
 function resetFilters() {
   document.querySelectorAll("#filters input, #filters select").forEach(el => el.value = "");
   const devicesFilter = document.getElementById("filterDevices");
@@ -369,6 +358,7 @@ function renderLabs(data) {
     console.error("❌ Помилка при рендерингу лабораторій:", err);
   }
 }
+
 // ==========================
 // Пагінація
 // ==========================
@@ -379,7 +369,7 @@ function renderPagination(data = filteredLabs) {
   pagination.innerHTML = "";
 
   const totalPages = Math.ceil(data.length / pageSize);
-  if (totalPages <= 1) return; // якщо сторінка одна — не показуємо
+  if (totalPages <= 1) return;
 
   for (let i = 1; i <= totalPages; i++) {
     const btn = document.createElement("button");
@@ -395,6 +385,7 @@ function renderPagination(data = filteredLabs) {
     pagination.appendChild(btn);
   }
 }
+
 // ==========================
 // Ініціалізація карти
 // ==========================
@@ -425,7 +416,6 @@ function initMap() {
   });
   map.addControl(drawControl);
 
-  // обробник створення контуру
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
     drawnItems.addLayer(layer);
@@ -434,7 +424,7 @@ function initMap() {
 
     labsInPolygon = labsCache.filter(lab => {
       if (!lab.lat || !lab.lng) return false;
-      const point = [lab.lng, lab.lat]; // leaflet-pip очікує [lng, lat]
+      const point = [lab.lng, lab.lat];
       return leafletPip.pointInLayer(point, geojsonLayer).length > 0;
     });
 
@@ -506,8 +496,8 @@ function updateMap(labs) {
         Прилади: ${(lab.devices || []).map(d => d.device || d.category).join(", ") || "—"}<br>
         КП: ${(lab.devices || []).map(d => d.kp).filter(Boolean).join(", ") || "—"}<br>
         <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
-        <button onclick="editLabCard('${lab.edrpou}')">✏️ Редагувати</button>  
-        <button onclick="openCreateVisitModal('${lab.edrpou}')">📅 Візит</button>
+          <button onclick="editLabCard('${lab.edrpou}')">✏️ Редагувати</button>  
+          <button onclick="openCreateVisitModal('${lab.edrpou}')">📅 Візит</button>
         </div>
       `;
 
@@ -636,61 +626,22 @@ function closeModal() {
 async function deleteLab(edrpou) {
   if (!confirm("❌ Ви впевнені, що хочете видалити цю лабораторію?")) return;
 
-  // видаляємо лабораторію
   await deleteFromDB("labs", edrpou);
 
-  // видаляємо пов’язані візити
   const visits = await getAllFromDB("visits");
-  const remainingVisits = visits.filter(v => v.labId !== edrpou);
   for (const v of visits.filter(v => v.labId === edrpou)) {
     await deleteFromDB("visits", v.id);
   }
 
-  alert("✅ Лабораторію та її візити видалено з кешу (IndexedDB)");
-  // оновлюємо список
+  alert("✅ Лабораторію та її візити видалено з IndexedDB");
   labsCache = await getAllFromDB("labs");
   filteredLabs = labsCache;
   renderLabs(filteredLabs);
   updateMap(filteredLabs);
 }
-// ==========================
-// Генерація місячних візитів
-// ==========================
-/*async function generateMonthlyLabVisits(tasks) {
-  try {
-    if (!Array.isArray(tasks) || tasks.length === 0) return [];
-
-    const visitsByMonth = {};
-    tasks.forEach(task => {
-      const date = new Date(task.date);
-      if (isNaN(date)) return;
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      if (!visitsByMonth[monthKey]) visitsByMonth[monthKey] = [];
-      visitsByMonth[monthKey].push(task);
-    });
-
-    const visitsPayload = Object.entries(visitsByMonth).map(([monthKey, monthTasks]) => {
-      const minDate = monthTasks.map(t => new Date(t.date)).reduce((a, b) => (a < b ? a : b));
-      return {
-        id: `${monthTasks[0].labId}_${monthKey}_${Date.now()}`,
-        labId: monthTasks[0].labId,
-        labName: monthTasks[0].labName || "—",
-        date: minDate.toISOString(),
-        tasks: monthTasks,
-        status: "заплановано"
-      };
-    });
-
-    return visitsPayload;
-
-  } catch (err) {
-    console.error("❌ Помилка при генерації місячних візитів:", err);
-    return [];
-  }
-}*/
 
 // ==========================
-// Масова генерація візитів для всіх лабораторій (тільки кеш)
+// Масова генерація візитів для всіх лабораторій
 // ==========================
 async function generateAllLabVisits() {
   try {
@@ -707,7 +658,6 @@ async function generateAllLabVisits() {
         continue;
       }
 
-      // тут можна додати просту задачу "візит" без генерації задач для приладів
       const visit = {
         id: `${lab.edrpou}_${Date.now()}`,
         labId: lab.edrpou,
@@ -720,137 +670,52 @@ async function generateAllLabVisits() {
       allNewVisits.push(visit);
     }
 
-    if (allNewVisits.length > 0) {
-      for (const v of allNewVisits) {
-        await putToDB("visits", v);
-      }
+    for (const v of allNewVisits) {
+      await addVisit(v); // 🔑 тепер через уніфіковану функцію
     }
 
-    visitsCache = await getAllFromDB("visits");
-    syncVisitsToLabs();
-
-    alert(`✅ Згенеровано ${allNewVisits.length} нових візитів, збережено у кеш (IndexedDB)!`);
+    alert(`✅ Згенеровано ${allNewVisits.length} нових візитів, збережено у IndexedDB!`);
   } catch (err) {
     console.error("❌ Помилка при генерації візитів:", err);
     alert("⚠️ Не вдалося згенерувати візити.");
   }
 }
+
 // ==========================
 // Створення візиту вручну (IndexedDB)
 // ==========================
 async function confirmCreateVisit() {
   const manager = localStorage.getItem("userLogin") || "Невідомо";
-  const date = document.getElementById("visitDate")?.value; // формат YYYY-MM-DD
-  const time = document.getElementById("visitTime")?.value; // формат HH:MM
+  const date = document.getElementById("visitDate")?.value;
 
-  if (!date || !time) {
-    alert("❌ Виберіть дату та час");
+  if (!date) {
+    alert("❌ Виберіть дату");
     return;
   }
 
-  // генеруємо унікальний id
-  const visitId = `${window.currentLabEdrpou}_${date}_${time}_${Date.now()}`;
+  const lab = labsCache.find(l => l.edrpou === window.currentLabEdrpou);
+  if (!lab) {
+    alert("⚠️ Лабораторія не знайдена");
+    return;
+  }
+
+  const visitId = `${lab.edrpou}_${date}_${Date.now()}`;
 
   const newVisit = {
     id: visitId,
-    labId: String(window.currentLabEdrpou).trim(),
-    date,   // зберігаємо окремо
-    time,   // зберігаємо окремо
+    labId: lab.edrpou,
+    date,
     manager,
     status: "заплановано",
-    notes: ""
+    notes: "",
+    lat: lab.lat || null,
+    lng: lab.lng || null,
+    institution: lab.institution || ""
   };
 
-  // перевірка дублювання
-  const visits = await getAllFromDB("visits");
-  const alreadyExists = visits.some(v =>
-    v.labId === newVisit.labId && v.date === newVisit.date && v.time === newVisit.time
-  );
-  if (alreadyExists) {
-    alert("⚠️ Такий візит вже існує у кеші!");
-    return;
-  }
-
-  // збереження у IndexedDB
-  await putToDB("visits", newVisit);
-  visitsCache = await getAllFromDB("visits");
-
-  // синхронізація з лабораторіями
-  syncVisitsToLabs();
-
-  // оновлення календаря
-  if (window.rerenderCalendar) window.rerenderCalendar();
-
-  alert("✅ Візит додано у кеш (IndexedDB)!");
+  await addVisit(newVisit);
+  alert("✅ Візит додано у IndexedDB!");
   closeCreateVisitModal();
-}
-
-/// ==========================
-// Звіт по закупках реагентів
-// ==========================
-function generateReagentsReport(labs = labsCache) {
-  let reportHtml = "<h3>📊 Звіт по закупках реагентів</h3><table border='1' cellpadding='5'>";
-  reportHtml += "<tr><th>Лабораторія</th><th>Прилад</th><th>Реагент</th><th>Останнє замовлення</th><th>Кількість</th><th>Прогноз (днів)</th></tr>";
-
-  labs.forEach(lab => {
-    (lab.devices || []).forEach(device => {
-      if (device.reagentsInfo) {
-        Object.entries(device.reagentsInfo).forEach(([name, info]) => {
-          const count = info.lastOrderCount || 0;
-          const date = info.lastOrderDate || "—";
-          const forecast = count > 0 ? Math.floor(count / 25) : "—";
-          reportHtml += `<tr>
-            <td>${lab.partner || "—"}</td>
-            <td>${device.device || "—"}</td>
-            <td>${name}</td>
-            <td>${date}</td>
-            <td>${count}</td>
-            <td>${forecast}</td>
-          </tr>`;
-        });
-      }
-    });
-  });
-
-  reportHtml += "</table>";
-  const container = document.getElementById("reagentsReport");
-  if (container) container.innerHTML = reportHtml;
-}
-
-// ==========================
-// Експорт закупівель у Excel
-// ==========================
-function exportPurchasesToExcel() {
-  if (!labsInPolygon || labsInPolygon.length === 0) {
-    alert("❌ Немає лабораторій у контурі");
-    return;
-  }
-
-  const data = [];
-
-  labsInPolygon.forEach(lab => {
-    (lab.devices || []).forEach(device => {
-      (device.reagents || []).forEach(reagent => {
-        data.push({
-          "Лабораторія": lab.institution || "",
-          "Предмет": reagent.name || "",
-          "Кількість": reagent.quantity || 0,
-          "Дата": reagent.date || ""
-        });
-      });
-    });
-  });
-
-  if (data.length === 0) {
-    alert("⚠️ У виділених лабораторіях немає закупівель");
-    return;
-  }
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Закупівлі");
-
-  XLSX.writeFile(workbook, `purchases_${new Date().toISOString().split("T")[0]}.xlsx`);
 }
 
 // ==========================
@@ -872,29 +737,21 @@ function showManagerFilter() {
 // Ініціалізація при завантаженні сторінки
 // ==========================
 document.addEventListener("DOMContentLoaded", async () => {
-  // 1️⃣ Ініціалізація карти
   initMap();
 
-  // 2️⃣ Завантаження лабораторій з IndexedDB
   labsCache = await getAllFromDB("labs");
   filteredLabs = labsCache;
 
-  // 3️⃣ Показ фільтра менеджера
   showManagerFilter();
-
-  // 4️⃣ Заповнення підказок
   populateFilterOptions(labsCache);
 
-  // 5️⃣ Рендеринг лабораторій та карти
   renderLabs(filteredLabs);
   updateMap(filteredLabs);
 
-  // 6️⃣ Автоматичне застосування фільтрів при зміні будь-якого поля
   document.querySelectorAll("#filters input, #filters select").forEach(el => {
     el.addEventListener("change", applyFilters);
   });
 
-  // 7️⃣ Кнопка скидання фільтрів
   const resetBtn = document.querySelector("button[onclick='resetFilters()']");
   if (resetBtn) resetBtn.addEventListener("click", resetFilters);
 
@@ -905,7 +762,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Створення нової лабораторії (з кнопки)
 // ==========================
 function createNewLab() {
-  // просто переходимо на сторінку картки
   window.location.href = "labcard.html";
 }
 
@@ -913,7 +769,6 @@ function createNewLab() {
 // Редагування лабораторії
 // ==========================
 function editLabCard(edrpou) {
-  // передаємо ЄДРПОУ через URL
   window.location.href = `./labcard.html?id=${edrpou}`;
 }
 
@@ -956,34 +811,110 @@ function exportLabsToExcel() {
   XLSX.writeFile(workbook, `labs_${new Date().toISOString().split("T")[0]}.xlsx`);
 }
 
-// ==========================
-// Очищення кешу IndexedDB
-// ==========================
-/*async function clearVisitsCache() {
+function exportPurchasesToExcel() {
+  if (!labsInPolygon || labsInPolygon.length === 0) {
+    alert("❌ Немає лабораторій у контурі");
+    return;
+  }
+
+  const data = [];
+
+  labsInPolygon.forEach(lab => {
+    (lab.devices || []).forEach(device => {
+      (device.reagents || []).forEach(reagent => {
+        data.push({
+          "Лабораторія": lab.institution || "",
+          "Предмет": reagent.name || "",
+          "Кількість": reagent.quantity || 0,
+          "Дата": reagent.date || ""
+        });
+      });
+    });
+  });
+
+  if (data.length === 0) {
+    alert("⚠️ У виділених лабораторіях немає закупівель");
+    return;
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Закупівлі");
+
+  XLSX.writeFile(workbook, `purchases_${new Date().toISOString().split("T")[0]}.xlsx`);
+}
+function generateReagentsReport(labs = labsCache) {
+  let reportHtml = "<h3>📊 Звіт по закупках реагентів</h3><table border='1' cellpadding='5'>";
+  reportHtml += "<tr><th>Лабораторія</th><th>Прилад</th><th>Реагент</th><th>Останнє замовлення</th><th>Кількість</th><th>Прогноз (днів)</th></tr>";
+
+  labs.forEach(lab => {
+    (lab.devices || []).forEach(device => {
+      if (device.reagentsInfo) {
+        Object.entries(device.reagentsInfo).forEach(([name, info]) => {
+          const count = info.lastOrderCount || 0;
+          const date = info.lastOrderDate || "—";
+          const forecast = count > 0 ? Math.floor(count / 25) : "—";
+          reportHtml += `<tr>
+            <td>${lab.partner || "—"}</td>
+            <td>${device.device || "—"}</td>
+            <td>${name}</td>
+            <td>${date}</td>
+            <td>${count}</td>
+            <td>${forecast}</td>
+          </tr>`;
+        });
+      }
+    });
+  });
+
+  reportHtml += "</table>";
+  const container = document.getElementById("reagentsReport");
+  if (container) container.innerHTML = reportHtml;
+}
+async function getAllPartners() {
   try {
-    await clearStore("visits");   // очищаємо IndexedDB
-    visitsCache = [];
-    console.log("✅ Кеш візитів очищено");
+    const labs = await getAllFromDB("labs");
+    const partners = [...new Set(
+      labs.map(l => l.partner).filter(p => typeof p === "string" && p.trim() !== "")
+    )];
 
-    syncVisitsToLabs();
-    if (window.rerenderCalendar) window.rerenderCalendar();
-
-    alert("✅ Усі візити видалено з кешу (IndexedDB)");
+    console.log("✅ Партнери:", partners);
+    return partners;
   } catch (err) {
-    console.error("❌ Помилка при очищенні кешу:", err);
-    alert("⚠️ Не вдалося очистити кеш візитів");
+    console.error("❌ Помилка при отриманні партнерів:", err);
+    return [];
+  }
+}
+function openCreateVisitModal(edrpou) {
+  window.currentLabEdrpou = edrpou;
+  const modal = document.getElementById("createVisitModal");
+  if (modal) {
+    modal.classList.add("show");
   }
 }
 
-async function clearTasksCache() {
-  try {
-    await clearStore("tasks");
-    window.tasksCache = [];
-    console.log("✅ Кеш задач очищено (IndexedDB)");
-  } catch (err) {
-    console.error("❌ Помилка при очищенні кешу задач:", err);
+function closeCreateVisitModal() {
+  const modal = document.getElementById("createVisitModal");
+  if (modal) {
+    modal.classList.remove("show");
   }
-}*/
+}
+
+// Закриття модалки при кліку на фон
+window.addEventListener("click", function(event) {
+  const modal = document.getElementById("createVisitModal");
+  if (event.target === modal) {
+    closeCreateVisitModal();
+  }
+});
+
+// Закриття модалки при натисканні Esc
+window.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    closeCreateVisitModal();
+  }
+});
+
 
 // ==========================
 // Прив’язка функцій до window
@@ -998,26 +929,9 @@ window.deleteLab = deleteLab;
 window.generateAllLabVisits = generateAllLabVisits;
 window.generateReagentsReport = generateReagentsReport;
 window.confirmCreateVisit = confirmCreateVisit;
-/*.clearTasksCache = clearTasksCache;
-window.clearVisitsCache = clearVisitsCache;*/
 window.sortTable = sortTable;
-async function getAllPartners() {
-  try {
-    // витягуємо всі лабораторії з IndexedDB
-    const labs = await getAllFromDB("labs");
-
-    // формуємо масив партнерів, відфільтровуємо пусті та дублікати
-    const partners = [...new Set(
-      labs.map(l => l.partner).filter(p => typeof p === "string" && p.trim() !== "")
-    )];
-
-    console.log("✅ Партнери:", partners);
-    return partners;
-  } catch (err) {
-    console.error("❌ Помилка при отриманні партнерів:", err);
-    return [];
-  }
-}
-
-// щоб можна було викликати з консолі
 window.getAllPartners = getAllPartners;
+window.openPurchasesModal = openPurchasesModal;
+window.closePurchasesModal = closePurchasesModal;
+window.openModal = openModal;
+window.closeModal = closeModal;

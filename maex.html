@@ -2,6 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ЛПЗ у контурах</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
@@ -16,6 +17,7 @@
 <body>
 <h3>Мапа ЛПЗ</h3>
 <div id="controls">
+  <label for="colorSelect">Виберіть колір:</label>
   <select id="colorSelect">
     <option value="red">Червоний</option>
     <option value="blue">Синій</option>
@@ -38,6 +40,7 @@
   <label><input type="checkbox" class="catFilter" value="clinic" checked> Клініки</label>
   <label><input type="checkbox" class="catFilter" value="doctors" checked> ЦПМСД / лікарі</label>
   <label><input type="checkbox" class="catFilter" value="laboratory" checked> Лабораторії</label>  <br><br>
+  <button onclick="fetchInstitutions()">Завантажити заклади</button>
   <button onclick="downloadExcel()">Завантажити Excel</button>
   <button onclick="clearAll()">Очистити всі контури</button>
 </div>
@@ -207,6 +210,28 @@
   document.querySelectorAll(".catFilter").forEach(cb => {
     cb.addEventListener("change", renderTable);
   });
+  var polygons = []; // масив для збереження контурів
+
+// коли створюється новий контур
+map.on(L.Draw.Event.CREATED, function (e) {
+  var layer = e.layer;
+  var color = document.getElementById("colorSelect").value;
+  layer.setStyle({ color: color });
+  drawnItems.addLayer(layer);
+  polygons.push({ layer, color }); // зберігаємо контур і його колір
+});
+
+// кнопка для запуску пошуку закладів
+function fetchInstitutions() {
+  allResults = [];
+  document.getElementById("lists").innerHTML = "";
+  polygons.forEach(p => {
+    var polygon = p.layer.toGeoJSON();
+    var bounds = p.layer.getBounds();
+    loadHospitals(polygon, bounds, p.color);
+  });
+}
+
 </script>
 </body>
 </html>

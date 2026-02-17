@@ -26,117 +26,237 @@
 
   <!-- Стилі -->
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0; padding: 0;
-      background: linear-gradient(135deg, #006400, #004d00);
-      color: #fff;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h1 { margin-top: 30px; }
-    .dashboard {
-      max-width: 1200px;
-      width: 95%;
-      margin: 20px auto;
-      padding: 20px;
-      background: #008000;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.6);
-    }
-    .lab-card {
-      background: #fff;
-      color: #000;
-      padding: 12px;
-      margin: 10px 0;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-    .lab-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .lab-actions button {
-      flex: 1;
-      padding: 6px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: background 0.3s ease;
-    }
-    .lab-actions button:nth-child(1) { background: #009933; color: #fff; } /* редагувати */
-    .lab-actions button:nth-child(2) { background: #cc0000; color: #fff; } /* видалити */
-    .lab-actions button:nth-child(3) { background: #0066cc; color: #fff; } /* створити візит */
-    .lab-actions button:hover { opacity: 0.85; }
-    button {
-      margin: 4px;
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background-color: #006400;
-      color: #fff;
-    }
-    button:hover { background-color: #003300; }
-    input{
-      width: 96%;
-      padding: 6px;
-      border-radius: 4px;
-      border: none;
-    }
-    select {
-      width: 100%;
-      padding: 6px;
-      border-radius: 4px;
-      border: none;
-    }
-    .hrefs {
-      text-align: center;
-      margin-top: 10px;
-    }
-    #filters {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      width: 95%;
-      margin: 20px auto;
-    }
-    .filters-row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .filters-row label {
-      flex: 1 1 20%;
-      min-width: 180px;
-      background: #004d00;
-      padding: 6px;
-      border-radius: 6px;
-    }
-    #pagination { margin-top: 20px; text-align: center; }
-    #pagination button { margin: 4px; }
-    #purchasesTable {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    #purchasesTable th,
-    #purchasesTable td {
-      border: 1px solid white;
-      padding: 8px;
-      text-align: left;
-    }
-    #purchasesTable th {
-      background-color: #333;
-      color: white;
-    }
-    #purchasesTable tr:hover {
-      background-color: #45ff8391;
-    }
+  body {
+  font-family: Arial, sans-serif;
+  margin: 0; padding: 0;
+  background: linear-gradient(135deg, #006400, #004d00);
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 { margin-top: 30px; }
+
+.dashboard {
+  max-width: 1200px;
+  width: 95%;
+  margin: 20px auto;
+  padding: 20px;
+  background: #008000;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
+}
+
+.lab-card {
+  background: #fff;
+  color: #000;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+}
+
+.lab-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lab-actions button {
+  flex: 1;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s ease;
+}
+
+.lab-actions button:nth-child(1) { background: #009933; color: #fff; } /* редагувати */
+.lab-actions button:nth-child(2) { background: #cc0000; color: #fff; } /* видалити */
+.lab-actions button:nth-child(3) { background: #0066cc; color: #fff; } /* створити візит */
+.lab-actions button:hover { opacity: 0.85; }
+
+button {
+  margin: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background-color: #006400;
+  color: #fff;
+}
+button:hover { background-color: #003300; }
+
+input, select {
+  width: 96%;
+  padding: 6px;
+  border-radius: 4px;
+  border: none;
+}
+
+.hrefs {
+  text-align: center;
+  margin-top: 10px;
+}
+
+#filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 95%;
+  margin: 20px auto;
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.filters-row label {
+  flex: 1 1 20%;
+  min-width: 180px;
+  background: #004d00;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+#pagination { margin-top: 20px; text-align: center; }
+#pagination button { margin: 4px; }
+
+#purchasesTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+#purchasesTable th,
+#purchasesTable td {
+  border: 1px solid white;
+  padding: 8px;
+  text-align: left;
+}
+#purchasesTable th {
+  background-color: #333;
+  color: white;
+}
+#purchasesTable tr:hover {
+  background-color: #45ff8391;
+}
+
+/* Стилі модалки */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modal.show {
+  display: block;
+  opacity: 1;
+}
+
+.modal-content {
+  background-color: #008000;
+  margin: 10% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 300px;
+  border-radius: 8px;
+  position: relative;
+  transform: translateY(-30px);
+  transition: transform 1s ease;
+}
+
+.modal.show .modal-content {
+  transform: translateY(0);
+}
+
+
+/* Кнопка закриття */
+.close-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 24px;
+  font-weight: bold;
+  color: #888;
+  cursor: pointer;
+}
+.close-btn:hover { color: #000; }
+
+
+/* 📱 Адаптивність для планшетів і мобільних */
+@media (max-width: 768px) {
+  body {
+    font-size: 18px;
+    align-items: stretch;
+  }
+
+  .dashboard {
+    width: 100%;
+    padding: 10px;
+    border-radius: 0;
+  }
+
+  .lab-card {
+    margin: 12px 0;
+    padding: 16px;
+    font-size: 1rem;
+  }
+
+  .lab-actions {
+    flex-direction: column;
+  }
+  .lab-actions button {
+    width: 100%;
+    font-size: 1rem;
+    padding: 10px;
+  }
+
+  input, select {
+    width: 100%;
+    font-size: 1rem;
+    padding: 10px;
+  }
+
+  .filters-row {
+    flex-direction: column;
+  }
+  .filters-row label {
+    min-width: unset;
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .modal-content {
+    width: 90%;
+    margin: 20% auto;
+    font-size: 18px;
+  }
+
+  .close-btn {
+    font-size: 28px;
+  }
+
+  .modal-content input,
+  .modal-content button {
+    width: 100%;
+    margin-top: 10px;
+    font-size: 16px;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -203,17 +323,19 @@
   <div id="pagination"></div>
 
   <!-- Модалка створення візиту -->
-  <div id="createVisitModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); 
-       background:#fff; color:#000; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.6); 
-       padding:20px; z-index:1000; width:300px;">
-    <span class="close" onclick="closeCreateVisitModal()" 
-          style="float:right; cursor:pointer; font-size:20px;">&times;</span>
+<div id="createVisitModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeCreateVisitModal()">×</span>
     <h3>Створення візиту</h3>
-    <label>Дата: <input type="date" id="visitDate"></label><br><br>
-    <label>Час: <input type="time" id="visitTime"></label><br><br>
-    <button onclick="confirmCreateVisit()">✅ Створити</button>
-    <button onclick="closeCreateVisitModal()">❌ Скасувати</button>
+    <label for="visitDate">Дата:</label>
+    <input type="date" id="visitDate">
+    <div style="margin-top:10px;">
+      <button onclick="confirmCreateVisit()">✅ Підтвердити</button>
+      <button onclick="closeCreateVisitModal()">❌ Скасувати</button>
+    </div>
   </div>
+</div>
+
 
   <!-- Контейнер для мапи -->
   <div id="map" style="width:95%; height:500px; margin:20px auto; border-radius:12px;"></div>

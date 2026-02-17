@@ -138,8 +138,26 @@
       <button onclick="rerenderCalendar()">🔄 Оновити</button>
       <a href="../labcards/labs.html"><button type="button">🏥 Перейти до лабораторій</button></a>
     </div>
-    <div id="calendar"></div>
-  </div>
+    <div style="text-align:right; margin-bottom:10px;">
+  <button id="buildRouteBtn" style="
+    padding:10px 15px;
+    background:#2196f3;
+    color:#fff;
+    border:none;
+    border-radius:5px;
+    cursor:pointer;
+    display:none;
+  ">
+    🚗 Побудувати маршрут
+  </button>
+</div>
+<div id="calendar"></div>
+<div class="visit-reminders">
+  ${renderRemindersForVisit(v)}
+</div>
+<div id="map" style="height:600px; margin-top:20px;"></div>
+</div>
+
 
   <!-- Меню візиту -->
   <div id="visitMenu">
@@ -167,7 +185,13 @@
       <button onclick="submitVisitData()">✅ Зберегти дані</button>
     </div>
   </div>
+  <!-- Контейнер для карти -->
+<div id="map" style="height:600px; width:100%; position:relative;"></div>
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+  <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
   <script src="../shared/visits.js"></script>
   <script src="../shared/calendar.js"></script>
   <script src="../labcards/labcards.js"></script>

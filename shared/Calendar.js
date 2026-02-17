@@ -1,31 +1,21 @@
-
-
-// === Кешування ===
-let visitsCache = JSON.parse(localStorage.getItem("visits") || "[]");
-let labCardsCache = JSON.parse(localStorage.getItem("labCards") || "[]");
-
-
-function loadVisits() {
-  return visitsCache;
-}
-
-function saveVisits(visits) {
-  visitsCache = visits;
-  localStorage.setItem("visits", JSON.stringify(visits));
-}
-
-function loadLabCards() {
-  return labCardsCache;
-}
-
-function saveLabCards(labs) {
-  labCardsCache = labs;
-  localStorage.setItem("labCards", JSON.stringify(labs));
-}
-
-// === Глобальні змінні ===
 let currentVisitId = null;
+let currentVisit = null;
+let currentLabId = null;
 let calendar = null;
+
+// === IndexedDB helpers ===
+async function loadVisits() {
+  return await getAllFromDB("visits");
+}
+async function saveVisit(visit) {
+  await putToDB("visits", visit);
+}
+async function loadLabCards() {
+  return await getAllFromDB("labs");
+}
+async function saveLabCard(lab) {
+  await putToDB("labs", lab);
+}
 
 // === Допоміжні функції ===
 function statusColor(status) {
@@ -37,21 +27,15 @@ function statusColor(status) {
     default: return "#2196f3";
   }
 }
-
 function filterByStatus(status) {
-  const elMap = {
-    "заплановано": "filterPlanned",
-    "в процесі": "filterInProgress",
-    "відмінено": "filterCancelled",
-    "перенесено": "filterRescheduled",
-    "проведено": "filterDone"
-  };
-  const id = elMap[(status || "заплановано").toLowerCase()];
-  const el = id ? document.getElementById(id) : null;
-  return el ? el.checked : true; // якщо чекбокса немає — не фільтруємо
+  const s = (status || "заплановано").toLowerCase();
+  if (s === "заплановано") return document.getElementById("filterPlanned").checked;
+  if (s === "в процесі") return document.getElementById("filterInProgress").checked;
+  if (s === "відмінено") return document.getElementById("filterCancelled").checked;
+  if (s === "перенесено") return document.getElementById("filterRescheduled").checked;
+  if (s === "проведено") return document.getElementById("filterDone").checked;
+  return true;
 }
-
-
 function eventsFromVisits(visits) {
   return visits
     .filter(v => filterByStatus(v.status))
@@ -65,52 +49,10 @@ function eventsFromVisits(visits) {
     }));
 }
 
-// === Оновлення статусів ===
-function updateVisitStatus(visitId, status) {
-  const visits = loadVisits();
-  const v = visits.find(x => x.id === visitId);
-  if (!v) return;
-  v.status = status;
-  saveVisits(visits);
-}
-
-function cancelVisit(visitId) {
-  updateVisitStatus(visitId, "відмінено");
-}
-
-// === Календар ===
-function rerenderCalendar() {
-  const events = eventsFromVisits(loadVisits());
-  calendar.removeAllEvents();
-  events.forEach(e => calendar.addEvent(e));
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const calendarEl = document.getElementById("calendar");
-  calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    locale: "uk",
-    headerToolbar: {
-      left: "prev,next today",
-      center: "title",
-      right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
-    },
-    events: eventsFromVisits(loadVisits()),
-    eventClick: info => showVisitMenu(info.event.extendedProps.visit)
-  });
-  calendar.render();
-
-  // Експортуємо у window
-  window.hideVisitMenu = hideVisitMenu;
-  window.onStartVisit = onStartVisit;
-  window.onCancelVisit = onCancelVisit;
-  window.onRescheduleVisit = onRescheduleVisit;
-  window.rerenderCalendar = rerenderCalendar;
-});
-
 // === Меню візиту ===
-function showVisitMenu(visit) {
+async function showVisitMenu(visit) {
   currentVisitId = visit.id;
+  currentVisit = visit;
 
   document.getElementById("visitMenuInfo").innerHTML = `
     <p><strong>${visit.labName}</strong></p>
@@ -121,39 +63,354 @@ function showVisitMenu(visit) {
 
   document.querySelector("#visitMenu .btn-start").onclick = () => onStartVisit();
   document.querySelector("#visitMenu .btn-cancel").onclick = () => onCancelVisit();
-  document.querySelector("#visitMenu .btn-reschedule").onclick = () => onRescheduleVisit();
-  document.querySelector("#visitMenu .btn-edit").onclick = () => editLabCard(visit.labId);
+  document.querySelector("#visitMenu .btn-reschedule").onclick = () => rescheduleVisit(currentVisitId);
+  document.querySelector("#visitMenu .btn-edit").onclick = () => onEditLabCard();
 
   document.getElementById("visitMenu").classList.add("show");
 }
-
-function hideVisitMenu() {
-  document.getElementById("visitMenu").classList.remove("show");
-}
+function hideVisitMenu() { document.getElementById("visitMenu").classList.remove("show"); }
 
 // === Дії з візитами ===
-function onStartVisit() {
-  updateVisitStatus(currentVisitId, "в процесі");
-  hideVisitMenu();
-  rerenderCalendar();
+async function onStartVisit() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+
+  const labCards = await loadLabCards();
+  const lab = labCards.find(l => l.id === v.labId || l.edrpou === v.labId);
+  if (!lab) return;
+
+  // тут твоя логіка модалки (залишаємо як було)
+  document.getElementById("visitModal").style.display = "block";
 }
 
-function onCancelVisit() {
-  cancelVisit(currentVisitId);
+async function confirmStartVisit() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  v.status = "в процесі";
+  await saveVisit(v);
+  closeVisitModal();
   hideVisitMenu();
-  rerenderCalendar();
+  await rerenderCalendar();
+}
+async function onCancelVisit() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  v.status = "відмінено";
+  await saveVisit(v);
+  hideVisitMenu();
+  await rerenderCalendar();
+}
+async function confirmReschedule(visitId) {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === visitId);
+  if (!v) return;
+  const newDate = document.getElementById("newVisitDate").value;
+  if (!newDate) return;
+  v.date = newDate;
+  v.status = "перенесено";
+  await saveVisit(v);
+  closeRescheduleModal();
+  hideVisitMenu();
+  await rerenderCalendar();
+}
+
+// === Календар ===
+async function rerenderCalendar() {
+  const visits = await loadVisits();
+  const events = eventsFromVisits(visits);
+  calendar.removeAllEvents();
+  events.forEach(e => calendar.addEvent(e));
+}
+document.addEventListener("DOMContentLoaded", async () => {
+  const visits = await loadVisits();
+  const calendarEl = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    locale: "uk",
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
+    },
+    events: eventsFromVisits(visits),
+    eventClick: info => showVisitMenu(info.event.extendedProps.visit)
+  });
+  calendar.render();
+
+  window.hideVisitMenu = hideVisitMenu;
+  window.onStartVisit = onStartVisit;
+  window.onCancelVisit = onCancelVisit;
+  window.onRescheduleVisit = rescheduleVisit;
+  window.onEditLabCard = onEditLabCard;
+  window.rerenderCalendar = rerenderCalendar;
+});
+async function onStartVisit() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+
+  const labCards = await loadLabCards();
+  const lab = labCards.find(l => l.id === v.labId || l.edrpou === v.labId);
+  if (!lab) return;
+
+  currentVisit = v;
+  currentLabId = lab.id;
+
+  // Формуємо модалку
+  let headerHtml = `
+    <h3>Візит: ${lab.partner}</h3>
+    <p>Дата: ${v.date}</p>
+  `;
+  let buttonsHtml = "<div class='tab-buttons'>";
+  let contentsHtml = "";
+
+  (lab.devices || []).forEach((device, idx) => {
+    const reagentsFromVisit = (v.tasks || [])
+      .filter(t => t.device === device.device && t.taskType === "reagents");
+
+    buttonsHtml += `<button onclick="openTab(${idx})" id="tabBtn_${idx}">${device.device}</button>`;
+    contentsHtml += `
+      <div class="tab-content" id="tab_${idx}">
+        <label>Кількість аналізів на день:
+          <input type="number" id="testsPerDay_${idx}" value="${device.testCount || 0}">
+        </label>
+
+        <h4>Реагенти</h4>
+        <table>
+          <tr><th>Завдання</th><th>Домовленість</th><th>Факт кількість</th><th>Факт дата</th></tr>
+          ${reagentsFromVisit.map((t, j) => {
+            const parsed = parseReagentAction(t.action);
+            const info = device.reagentsInfo?.[parsed.name] || {};
+            return `
+              <tr>
+                <td>${parsed.name} — ${v.date} (потреба: ${parsed.neededQuantity})</td>
+                <td><input type="number" id="agreement_${idx}_${j}" value="${parsed.neededQuantity}"></td>
+                <td><input type="number" id="factQty_${idx}_${j}" value="${info.lastOrderCount || 0}"></td>
+                <td><input type="date" id="factDate_${idx}_${j}" value="${info.lastOrderDate || ""}"></td>
+              </tr>
+            `;
+          }).join("")}
+        </table>
+
+        <h4>Сервіс</h4>
+        <table>
+          <tr><th></th><th>Вид сервісу</th><th>Дата</th></tr>
+          <tr>
+            <td>План</td>
+            <td><input type="text" id="servicePlanType_${idx}" value="${device.workType || ''}"></td>
+            <td><input type="date" id="servicePlanDate_${idx}" value="${(v.tasks.find(t => t.device === device.device && t.action === 'Сервіс')?.date) || ''}"></td>
+          </tr>
+          <tr>
+            <td>Домовленість</td>
+            <td><input type="text" id="serviceAgreementType_${idx}" value=""></td>
+            <td><input type="date" id="serviceAgreementDate_${idx}" value=""></td>
+          </tr>
+          <tr>
+            <td>Факт</td>
+            <td><input type="text" id="serviceFactType_${idx}" value="${device.workType || ''}"></td>
+            <td><input type="date" id="serviceFactDate_${idx}" value="${device.lastService || ''}"></td>
+          </tr>
+        </table>
+      </div>
+    `;
+  });
+
+  document.getElementById("visitModalTabs").innerHTML = headerHtml + buttonsHtml + contentsHtml;
+  document.getElementById("visitModal").style.display = "block";
+  openTab(0);
+}
+
+async function submitVisitData() {
+  const labCards = await loadLabCards();
+  const lab = labCards.find(l => l.id === currentLabId);
+  if (!lab) return;
+
+  (lab.devices || []).forEach((device, idx) => {
+    // кількість аналізів на день
+    device.testCount = parseInt(document.getElementById(`testsPerDay_${idx}`).value) || 0;
+
+    // реагенти з поточного візиту
+    const reagentsFromVisit = (currentVisit.tasks || [])
+      .filter(t => t.device === device.device && t.taskType === "reagents");
+
+    reagentsFromVisit.forEach((task, j) => {
+      const agreementQty = parseInt(document.getElementById(`agreement_${idx}_${j}`).value) || 0;
+      const factQty = parseInt(document.getElementById(`factQty_${idx}_${j}`).value) || 0;
+      const factDate = document.getElementById(`factDate_${idx}_${j}`).value || "";
+
+      // оновлюємо інформацію по реагенту у картці
+      if (!device.reagentsInfo) device.reagentsInfo = {};
+      device.reagentsInfo[task.reagentName || task.action] = {
+        lastOrderCount: factQty,
+        lastOrderDate: factDate
+      };
+
+      // оновлюємо саму задачу у візиті
+      task.agreement = { quantity: agreementQty };
+      task.fact = { quantity: factQty, date: factDate };
+    });
+
+    // сервіс
+    device.service = {
+      plan: {
+        type: document.getElementById(`servicePlanType_${idx}`).value || "",
+        date: document.getElementById(`servicePlanDate_${idx}`).value || ""
+      },
+      agreement: {
+        type: document.getElementById(`serviceAgreementType_${idx}`).value || "",
+        date: document.getElementById(`serviceAgreementDate_${idx}`).value || ""
+      },
+      fact: {
+        type: document.getElementById(`serviceFactType_${idx}`).value || "",
+        date: document.getElementById(`serviceFactDate_${idx}`).value || ""
+      }
+    };
+    device.lastService = device.service.fact.date;
+  });
+
+  // оновлюємо статус візиту
+  currentVisit.status = "проведено";
+
+  // зберігаємо лабораторію та візит у IndexedDB
+  await saveLabCard(lab);
+  await saveVisit(currentVisit);
+
+  // перерахунок майбутніх візитів
+  await recalculateSchedule(lab.id);
+
+  closeVisitModal();
+  hideVisitMenu();
+  await rerenderCalendar();
+}
+async function recalculateSchedule(labId) {
+  const labCards = await loadLabCards();
+  const lab = labCards.find(l => l.id === labId);
+  if (!lab) return;
+
+  (lab.devices || []).forEach(device => {
+    // реагенти: кожні 3 місяці
+    Object.keys(device.reagentsInfo || {}).forEach(name => {
+      const info = device.reagentsInfo[name];
+      if (info.lastOrderDate) {
+        const nextDate = addMonths(info.lastOrderDate, 3);
+        const newVisit = {
+          id: `${lab.id}_${nextDate}_${Date.now()}`,
+          labId: lab.id,
+          labName: lab.partner,
+          date: nextDate,
+          tasks: [{ device: device.device, action: `Замов реагент — ${name}`, taskType: "reagents" }],
+          status: "заплановано"
+        };
+        putToDB("visits", newVisit);
+      }
+    });
+
+    // сервіс: кожні 6 місяців
+    if (device.lastService) {
+      const nextServiceDate = addMonths(device.lastService, 6);
+      const newVisit = {
+        id: `${lab.id}_${nextServiceDate}_${Date.now()}`,
+        labId: lab.id,
+        labName: lab.partner,
+        date: nextServiceDate,
+        tasks: [{ device: device.device, action: "Сервіс", taskType: "service" }],
+        status: "заплановано"
+      };
+      putToDB("visits", newVisit);
+    }
+  });
+}
+function closeVisitModal() { 
+  document.getElementById("visitModal").style.display = "none"; 
+}
+
+async function confirmStartVisit() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  v.status = "в процесі";
+  await saveVisit(v);
+  closeVisitModal();
+  hideVisitMenu();
+  await rerenderCalendar();
+}
+
+async function onCancelVisit() { 
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  v.status = "відмінено";
+  await saveVisit(v);
+  hideVisitMenu();
+  await rerenderCalendar();
 }
 
 function onRescheduleVisit() {
   rescheduleVisit(currentVisitId);
 }
 
-function rescheduleVisit(visitId) {
-  // Remove existing modal if any
+async function onEditLabCard() {
+  const visits = await loadVisits();
+  const v = visits.find(x => x.id === currentVisitId);
+  if (!v) return;
+  // зберігаємо ID лабораторії у sessionStorage (щоб уникнути LocalStorage)
+  sessionStorage.setItem("editLabCard", JSON.stringify({ labId: v.labId }));
+  window.location.href = "../labcards/labcard.html";
+}
+
+async function rerenderCalendar() {
+  const visits = await loadVisits();
+  const events = eventsFromVisits(visits);
+  calendar.removeAllEvents();
+  events.forEach(e => calendar.addEvent(e));
+}
+function renderVisit(v) {
+  return `
+    ${v.date} 🕑 ${v.time || ""} — Лабораторія: ${v.institution || v.labId} (${v.status})
+  `;
+}
+function updateMap(visits) {
+  visits.forEach(v => {
+    if (v.lat && v.lng) {
+      L.marker([v.lat, v.lng]).addTo(map)
+        .bindPopup(`${v.institution || "Лабораторія"}<br>${v.date}`);
+    }
+  });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const visits = await loadVisits();
+  const calendarEl = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    locale: "uk",
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
+    },
+    events: eventsFromVisits(visits),
+    eventClick: info => showVisitMenu(info.event.extendedProps.visit)
+  });
+  calendar.render();
+
+  // Експортуємо в window
+  window.hideVisitMenu = hideVisitMenu;
+  window.onStartVisit = onStartVisit;
+  window.onCancelVisit = onCancelVisit;
+  window.onRescheduleVisit = onRescheduleVisit;
+  window.onEditLabCard = onEditLabCard;
+  window.rerenderCalendar = rerenderCalendar;
+});
+
+async function rescheduleVisit(visitId) {
   const existing = document.getElementById("rescheduleModal");
   if (existing) existing.remove();
 
-  const visits = loadVisits();
+  const visits = await loadVisits();
   const v = visits.find(x => x.id === visitId);
   if (!v) return;
 
@@ -176,8 +433,8 @@ function rescheduleVisit(visitId) {
   document.getElementById("rescheduleModal").style.display = "block";
 }
 
-function confirmReschedule(visitId) {
-  const visits = loadVisits();
+async function confirmReschedule(visitId) {
+  const visits = await loadVisits();
   const v = visits.find(x => x.id === visitId);
   if (!v) return;
 
@@ -185,78 +442,258 @@ function confirmReschedule(visitId) {
   if (!newDate) return;
 
   v.date = newDate;
-  v.status = "перенесено"; // позначаємо як перенесений
-  saveVisits(visits);
+  v.status = "перенесено";
+  await saveVisit(v);
 
   closeRescheduleModal();
   hideVisitMenu();
-  rerenderCalendar();
-
-  alert(`✅ Візит перенесено на ${newDate}`);
+  await rerenderCalendar();
 }
 
 function closeRescheduleModal() {
   const modal = document.getElementById("rescheduleModal");
   if (modal) modal.remove();
 }
+async function updateMapFromCalendar() {
+  const visits = await loadVisits();
+  const labs = await loadLabCards();
 
-window.rerenderCalendar = rerenderCalendar;
-function loadVisitsFromCache() {
-  return JSON.parse(localStorage.getItem("visits") || "[]");
-}
-document.addEventListener("DOMContentLoaded", () => {
-  const calendarEl = document.getElementById("calendar");
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    locale: "uk",
-    events: loadVisitsFromCache().map(v => ({
-      id: v.id,
-      title: `${v.labName} (${v.city})`,
-      start: v.date,
-      extendedProps: {
-        tasks: v.tasks,
-        status: v.status,
-        distanceKm: v.distanceKm,
-        travelHours: v.travelHours
-      }
-    })),
-    eventClick: function(info) {
-      const visit = info.event.extendedProps;
-      alert(
-        `📋 Лабораторія: ${info.event.title}\n` +
-        `📅 Дата: ${info.event.start.toLocaleDateString()}\n` +
-        `🛠️ Завдання: ${visit.tasks?.length || 0}\n` +
-        `📍 Відстань: ${visit.distanceKm} км\n` +
-        `⏱️ Час у дорозі: ${visit.travelHours} год\n` +
-        `Статус: ${visit.status}`
-      );
+  // Отримати поточний діапазон календаря
+  const view = calendar.view;
+  const start = view.activeStart;
+  const end = view.activeEnd;
+
+  // Вибрати тільки ті візити, що потрапляють у діапазон
+  const visibleVisits = visits.filter(v => {
+    const d = new Date(v.date);
+    return d >= start && d < end;
+  });
+
+  const labIds = [...new Set(visibleVisits.map(v => v.labId))];
+  const labsWithVisits = labs.filter(l => labIds.includes(l.id));
+
+  // Очистити карту
+  map.eachLayer(layer => {
+    if (layer instanceof L.Marker) map.removeLayer(layer);
+  });
+
+  // Додати маркери лабораторій
+  labsWithVisits.forEach(lab => {
+    if (lab.lat && lab.lng) {
+      L.marker([lab.lat, lab.lng])
+        .addTo(map)
+        .bindPopup(`<strong>${lab.partner}</strong><br>ID: ${lab.id}`);
     }
   });
 
+  // Показати/сховати кнопку маршруту
+  const routeBtn = document.getElementById("buildRouteBtn");
+  if (view.type === "timeGridDay") {
+    routeBtn.style.display = "block";
+  } else {
+    routeBtn.style.display = "none";
+  }
+}
+async function buildRouteForDay() {
+  if (calendar.view.type !== "timeGridDay") return;
+
+  // 1. Отримати GPS координати пристрою
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const startCoords = [pos.coords.latitude, pos.coords.longitude];
+
+    // 2. Отримати всі візити цього дня
+    const visits = await loadVisits();
+    const today = calendar.view.activeStart; // початок дня
+    const tomorrow = calendar.view.activeEnd; // кінець дня
+
+    const dayVisits = visits.filter(v => {
+      const d = new Date(v.date);
+      return d >= today && d < tomorrow;
+    });
+
+    // 3. Вибрати лабораторії
+    const labs = await loadLabCards();
+    const labIds = [...new Set(dayVisits.map(v => v.labId))];
+    const labsForRoute = labs.filter(l => labIds.includes(l.id));
+
+    // 4. Побудувати маршрут
+    const waypoints = labsForRoute
+      .filter(l => l.lat && l.lng)
+      .map(l => [l.lat, l.lng]);
+
+    // додаємо старт і фініш (однакові)
+    const routePoints = [startCoords, ...waypoints, startCoords];
+
+    // 5. Виклик стороннього сервісу маршрутизації (OSRM приклад)
+    const coordsStr = routePoints.map(p => p[1] + "," + p[0]).join(";");
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0].geometry;
+      L.geoJSON(route, { color: "blue" }).addTo(map);
+      map.fitBounds(L.geoJSON(route).getBounds());
+    }
+  }, err => {
+    alert("Не вдалося отримати координати пристрою");
+  });
+}
+  // Ініціалізація карти
+  function initMap() {
+    map = L.map("map").setView([50.45, 30.52], 7);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+  }
+
+  // Оновлення карти відповідно до календаря
+ async function updateMapFromCalendar() {
+  const visits = await loadVisits();
+  const labs = await loadLabCards();
+
+  const view = calendar.view;
+  const start = view.activeStart;
+  const end = view.activeEnd;
+
+  // Візити у поточному діапазоні
+  const visibleVisits = visits.filter(v => {
+    const d = new Date(v.date);
+    return d >= start && d < end;
+  });
+
+  const labIds = [...new Set(visibleVisits.map(v => v.labId))];
+  const labsWithVisits = labs.filter(l => labIds.includes(l.id));
+
+  // Очистити старі маркери
+  map.eachLayer(layer => {
+    if (layer instanceof L.Marker) map.removeLayer(layer);
+  });
+
+  // Додати маркери лабораторій
+  labsWithVisits.forEach(lab => {
+    if (lab.lat && lab.lng) {
+      // знайти найближчий візит для цієї лабораторії
+      const labVisits = visibleVisits.filter(v => v.labId === lab.id);
+      let nearestVisit = null;
+      if (labVisits.length > 0) {
+        nearestVisit = labVisits.reduce((a, b) => 
+          new Date(a.date) < new Date(b.date) ? a : b
+        );
+      }
+
+      let popupHtml = `<strong>${lab.partner}</strong><br>ID: ${lab.id}`;
+      if (nearestVisit) {
+        popupHtml += `<br>📅 ${nearestVisit.date}<br>Статус: ${nearestVisit.status}`;
+      }
+
+      L.marker([lab.lat, lab.lng])
+        .addTo(map)
+        .bindPopup(popupHtml);
+    }
+  });
+
+  // Кнопка маршруту тільки у режимі "день"
+  const routeBtn = document.getElementById("buildRouteBtn");
+  if (view.type === "timeGridDay") {
+    routeBtn.style.display = "block";
+  } else {
+    routeBtn.style.display = "none";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const visits = await loadVisits();
+  const calendarEl = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    locale: "uk",
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
+    },
+    events: eventsFromVisits(visits),
+    eventClick: info => showVisitMenu(info.event.extendedProps.visit),
+    datesSet: () => updateMapFromCalendar() // 🔑 оновлюємо карту при зміні вигляду
+  });
   calendar.render();
-  window.rerenderCalendar = () => {
-    calendar.removeAllEvents();
-    calendar.addEventSource(loadVisitsFromCache().map(v => ({
-      id: v.id,
-      title: `${v.labName} (${v.city})`,
-      start: v.date,
-      extendedProps: v
-    })));
-  };
+
+  // перший рендер карти
+  updateMapFromCalendar();
 });
-window.rerenderCalendar = () => {
-  calendar.removeAllEvents();
-  calendar.addEventSource(loadVisitsFromCache().map(v => ({
-    id: v.id,
-    title: `${v.labName} (${v.city})`,
-    start: v.date,
-    extendedProps: v
-  })));
-};
-function formatDateYYYYMMDD(date) {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+
+
+  // Побудова маршруту
+  async function buildRouteForDay() {
+    if (calendar.view.type !== "timeGridDay") return;
+
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const startCoords = [pos.coords.latitude, pos.coords.longitude];
+
+      const visits = await loadVisits();
+      const today = calendar.view.activeStart;
+      const tomorrow = calendar.view.activeEnd;
+
+      const dayVisits = visits.filter(v => {
+        const d = new Date(v.date);
+        return d >= today && d < tomorrow;
+      });
+
+      const labs = await loadLabCards();
+      const labIds = [...new Set(dayVisits.map(v => v.labId))];
+      const labsForRoute = labs.filter(l => labIds.includes(l.id));
+
+      const waypoints = labsForRoute
+        .filter(l => l.lat && l.lng)
+        .map(l => [l.lat, l.lng]);
+
+      const routePoints = [startCoords, ...waypoints, startCoords];
+      const coordsStr = routePoints.map(p => p[1] + "," + p[0]).join(";");
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0].geometry;
+        const geo = L.geoJSON(route, { color: "blue" }).addTo(map);
+        map.fitBounds(geo.getBounds());
+      }
+    }, err => {
+      alert("Не вдалося отримати координати пристрою");
+    });
+  }
+
+  // Прив’язати кнопку
+  document.getElementById("buildRouteBtn").addEventListener("click", buildRouteForDay);
+
+  // Викликати initMap при завантаженні
+  document.addEventListener("DOMContentLoaded", initMap);
+  // Оновлювати карту при зміні вигляду календаря
+document.getElementById("buildRouteBtn").addEventListener("click", async () => {
+  await buildRouteForDay();
+  document.getElementById("map").scrollIntoView({behavior:"smooth"});
+});
+function eventsFromVisits(visits) {
+  return visits.map((v, idx) => {
+    let startTime = "08:00";
+    if (idx === 1) startTime = "10:00";
+    if (idx === 2) startTime = "12:00";
+    return {
+      title: v.labName,
+      start: v.date + "T" + startTime,
+      extendedProps: { visit: v }
+    };
+  });
+}
+function renderRemindersForVisit(visit) {
+  let reminders = [];
+  (visit.tasks || []).forEach(t => {
+    if (t.taskType === "reagents") reminders.push("💡 Не забудь прайс");
+    if (t.taskType === "tender") reminders.push("📑 Візьми потрібні КП");
+    if (t.taskType === "service") reminders.push("🛠️ Візьми форму виклику сервісного інженера");
+  });
+  return reminders.join("<br>");
 }

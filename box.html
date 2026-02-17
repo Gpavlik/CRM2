@@ -14,15 +14,21 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+// Платформа
 let platform = { x: 160, y: 580, w: 80, h: 10, speed: 10 };
+
+// Об'єкти
 let box = { x: Math.random()*360, y: 0, size: 40, speed: 5 };
+let circle = { x: Math.random()*360, y: 0, radius: 30, speed: 3 };
 let score = 0;
 
+// Управління платформою
 document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") platform.x -= platform.speed;
   if (e.key === "ArrowRight") platform.x += platform.speed;
 });
 
+// Малювання
 function drawPlatform() {
   ctx.fillStyle = "lightblue";
   ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
@@ -33,21 +39,33 @@ function drawBox() {
   ctx.fillRect(box.x, box.y, box.size, box.size);
 }
 
+function drawCircle() {
+  ctx.fillStyle = "lightgreen";
+  ctx.beginPath();
+  ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function drawScore() {
   ctx.fillStyle = "white";
   ctx.font = "20px Arial";
   ctx.fillText("Score: " + score, 10, 25);
 }
 
+// Оновлення
 function update() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
+
   drawPlatform();
   drawBox();
+  drawCircle();
   drawScore();
 
+  // рух
   box.y += box.speed;
+  circle.y += circle.speed;
 
-  // перевірка зіткнення
+  // зіткнення з платформою
   if (box.y + box.size >= platform.y &&
       box.x + box.size > platform.x &&
       box.x < platform.x + platform.w) {
@@ -55,13 +73,36 @@ function update() {
     resetBox();
   }
 
+  if (circle.y + circle.radius >= platform.y &&
+      circle.x + circle.radius > platform.x &&
+      circle.x - circle.radius < platform.x + platform.w) {
+    score++;
+    resetCircle();
+  }
+
   // якщо пропустив
   if (box.y > canvas.height) {
     score = 0;
     resetBox();
   }
+  if (circle.y > canvas.height) {
+    score = 0;
+    resetCircle();
+  }
+
+  // збільшення швидкості кола кожні 5 очок
+  if (score % 5 === 0 && score > 0) {
+    circle.speed += 0.05;
+    box.speed += 0.05;
+  }
 
   requestAnimationFrame(update);
+}
+
+// Скидання
+function resetCircle() {
+  circle.x = Math.random() * (canvas.width - circle.radius * 2) + circle.radius;
+  circle.y = 0;
 }
 
 function resetBox() {
@@ -69,6 +110,7 @@ function resetBox() {
   box.y = 0;
 }
 
+// Запуск
 update();
 </script>
 </body>

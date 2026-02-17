@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Відновлення неповних записів з pr.json</title>
+</head>
+<body>
+  <h2>Відновлення неповних записів у LabsDB</h2>
+  <button id="restoreRecords">Відновити неповні записи</button>
+  <div id="progress">Очікування...</div>
+
+  <script>
+    let jsonData = [];
+
+    // 1. Завантаження JSON
+    async function loadJson() {
+      const response = await fetch("pr.json");
+      jsonData = await response.json();
+      console.log("JSON завантажено, рядків:", jsonData.length);
+      document.getElementById("progress").innerText = "JSON готовий для відновлення";
+    }
+
+    // 2. Витяг міста з адреси
+    function extractCity(address) {
+      if (!address) return null;
+      let match = address.match(/(місто|село|смт|с\.м\.т\.|м\.)\s*([А-ЯЇЄІҐ][^,]+)/i);
+      if (match && match[2]) return match[2].trim();
+      return null;
+    }
+
+    // 3. Словник менеджерів по областях
+    function mapRegionToManager(region) {
+      const managers = {
+        "Київська": "Людмила Присяжнюк, Прохоренко Катерина", 
+        "Дніпропетровська": "Алєксєєнко Антон", 
+        "Кіровоградська": "Алєксєєнко Антон", 
+        "Львівська": "Кулинська Мар'яна", 
+        "Івано-Франківська": "Приходько Ірина", 
+        "Закарпатська": "Клименко Тетяна", 
+        "Чернівецька": "Погрібна Марина", 
+        "Одеська": "Сазонова Тетяна", 
+        "Миколаївська": "Сазонова Тетяна", 
+        "Херсонська": "Сазонова Тетяна", 
+        "Запорізька": "Алєксєєнко Антон", 
+        "Донецька": "Алєксєєнко Антон", 
+        "Луганська": "Алєксєєнко Антон", 
+        "Харківська": "Демус Тетяна", 
+        "Полтавська": "Демус Тетяна", 
+        "Черкаська": "Богуславець Ірина", 
+        "Вінницька": "Погрібна Марина", 
+        "Житомирська": "Богуславець Ірина", 
+        "Чернігівська": "Прохоренко Катерина", 
+        "Сумська": "Демус Тетяна", 
+        "Волинська": "Мельничук Ірина", 
+        "Рівненська": "Мельничук Ірина", 
+        "Тернопільська": "Приходько Ірина", 
+        "Хмельницька": "Погрібна Марина"
+      };
+      return managers[region] || "";
+    }
+
+    // 4. Відновлення неповних записів
+    document.getElementById("restoreRecords").addEventListener("click", async function() {
+      await loadJson();
+
+      let request = indexedDB.open("labsDB", 3);
+      request.onsuccess = function(event) {
+        let db = event.target.result;
+        let tx = db.transaction("labs", "readwrite");
+        let store = tx.objectStore("labs");
+
+        let restoredCount = 0;
+
+        store.openCursor().onsuccess = function(e) {
+          let cursor = e.target.result;
+          if (cursor) {
+            let data = cursor.value;
+
+            // умова: якщо менеджер відсутній
+            if (!data.manager || data.manager === "") {
+              // шукаємо рядок у JSON по ЄДРПОУ
+              let row = jsonData.find(r => r.edrpou === data.edrpou);
+
+              if (row) {
+                data.institution = row.contragent || data.institution;
+                data.partner = row.contragent || data.partner;
+                data.region = row.region || data.region;
+                data.city = extractCity(row.address) || data.city;
+                data.address = row.address || data.address;
+                data.manager = mapRegionToManager(row.region);
+                data.districts = [mapRegionToManager(row.region)];
+
+                cursor.update(data);
+                restoredCount++;
+                console.log("✅ Відновлено запис:", data);
+              }
+            }
+
+            cursor.continue();
+          } else {
+            document.getElementById("progress").innerText =
+              `Завершено! Відновлено записів: ${restoredCount}`;
+          }
+        };
+      };
+    });
+  </script>
+</body>
+</html>

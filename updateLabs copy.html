@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Пошук записів без адреси та координат</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Записи без адреси та координат</h1>
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>ЄДРПОУ</th>
+        <th>Institution</th>
+        <th>Region</th>
+        <th>City</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+<script>
+window.onload = function() {
+    const request = indexedDB.open("labsDB", 3);
+
+    request.onsuccess = function(event) {
+        const db = event.target.result;
+        const tx = db.transaction("labs", "readonly");
+        const store = tx.objectStore("labs");
+
+        const tbody = document.querySelector("#resultTable tbody");
+
+        store.openCursor().onsuccess = function(e) {
+            const cursor = e.target.result;
+            if (cursor) {
+                let partner = cursor.value;
+
+                const noAddress = !partner.address || partner.address.trim() === "";
+                const noCoords = (!partner.lat || partner.lat === 0 || partner.lat === null) &&
+                                 (!partner.lng || partner.lng === 0 || partner.lng === null);
+
+                if (noAddress && noCoords) {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${partner.edrpou || ""}</td>
+                        <td>${partner.institution || ""}</td>
+                        <td>${partner.region || ""}</td>
+                        <td>${partner.city || ""}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+
+                cursor.continue();
+            } else {
+                if (tbody.children.length === 0) {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `<td colspan="4">Усі записи мають адресу або координати</td>`;
+                    tbody.appendChild(row);
+                }
+            }
+        };
+
+        request.onerror = function(event) {
+            console.error("Помилка відкриття IndexedDB:", event.target.error);
+        };
+    };
+};
+</script>
+</body>
+</html>

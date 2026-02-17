@@ -1,0 +1,41 @@
+<script>
+function cleanZeroQuantities() {
+  let request = indexedDB.open("labsDB", 3);
+  request.onsuccess = function(event) {
+    let db = event.target.result;
+    let tx = db.transaction("labs", "readwrite");
+    let store = tx.objectStore("labs");
+
+    let cleanedCount = 0;
+
+    store.openCursor().onsuccess = function(e) {
+      let cursor = e.target.result;
+      if (cursor) {
+        let record = cursor.value;
+
+        if (record.devices && Array.isArray(record.devices)) {
+          record.devices = record.devices.map(device => {
+            // гарантуємо масиви
+            if (!device.purchases) device.purchases = [];
+            if (!device.reagents) device.reagents = [];
+
+            // чистимо нульові закупівлі
+            device.purchases = device.purchases.filter(p => p.quantity > 0);
+            device.reagents = device.reagents.filter(r => r.quantity > 0);
+
+            return device;
+          }).filter(d => d.purchases.length > 0 || d.reagents.length > 0);
+        }
+
+        cursor.update(record);
+        cleanedCount++;
+        cursor.continue();
+      } else {
+        alert("Очищення завершено! Оновлено " + cleanedCount + " записів.");
+      }
+    };
+  };
+}
+</script>
+
+<button onclick="cleanZeroQuantities()">Очистити нульові закупівлі</button>
